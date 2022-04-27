@@ -56,6 +56,10 @@ param (
  [string[]]$BccAddress,
  [Parameter(Mandatory = $True)]
  [string[]]$AccountManagerEmail,
+ [SWITCH]$SetAccountExpirations,
+ [SWITCH]$SendAccountExpirationEmails,
+ [SWITCH]$DisableExpiredAccounts,
+ [SWITCH]$RemoveExpiredAccounts,
  [Alias('wi')]
  [SWITCH]$WhatIf
 )
@@ -500,14 +504,22 @@ New-ADSession
 $escapeRetired = Get-EscapeRetired
 $expiringADAccounts = Get-AccountsWithExpirationDate
 
-Show-BlockInfo 'Set Account Expirations'
-Set-AccountExpirations $escapeRetired
-Show-BlockInfo 'Send Account Expiration Emails'
-Send-ExpirationEmails $expiringADAccounts
-Show-BlockInfo 'Disable Expired Accounts'
-Disable-Expired $expiringADAccounts
-Show-BlockInfo 'Remove Expired Accounts after 18 months'
-Remove-OldAccounts $expiringADAccounts
+if ($SetAccountExpirations) {
+ Show-BlockInfo 'Set Account Expirations'
+ Set-AccountExpirations $escapeRetired
+}
+if ($SendAccountExpirationEmails) {
+ Show-BlockInfo 'Send Account Expiration Emails'
+ Send-ExpirationEmails $expiringADAccounts
+}
+if ($DisableExpiredAccounts) {
+ Show-BlockInfo 'Disable Expired Accounts'
+ Disable-Expired $expiringADAccounts
+}
+if ($RemoveExpiredAccounts) {
+ Show-BlockInfo 'Remove Expired Accounts after 18 months'
+ Remove-OldAccounts $expiringADAccounts
+}
 
 Clear-SessionData
 Show-TestRun
