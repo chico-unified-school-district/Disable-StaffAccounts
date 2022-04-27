@@ -13,7 +13,6 @@ Special Thanks to June Castillote for helping me get MSOnline functioning proper
 https://adamtheautomator.com/jenkins-powershll-64bit/
 Vasil Michev
 https://www.michev.info/Blog/Post/1655/quickly-list-all-groups-a-user-is-member-of-or-owner-of-in-office-365
-
 #>
 
 [cmdletbinding()]
@@ -60,7 +59,7 @@ param (
  [Alias('wi')]
  [SWITCH]$WhatIf
 )
-# ==================================
+
 function Clear-Resources {
  $MyInvocation.MyCommand.name
  Get-Module -name *tmp* | Remove-Module -Confirm:$false -Force -Verbose:$false
@@ -194,7 +193,7 @@ function Get-EscapeRetired {
 function New-ADSession {
  Write-Host ('{0},{1},Creating AD Domain Controller Session' -f $MyInvocation.MyCommand.Name, $DomainController) -Fore Green
  $adSession = New-PSSession -ComputerName $DomainController -Credential $ActiveDirectoryCredential
- $adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Move-ADObject' , 'Search-ADAccount'
+ $adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Move-ADObject' , 'Search-ADAccount', 'Remove-ADGroupMember'
  Import-PSSession -Session $adSession -Module 'ActiveDirectory' -CommandName $adCmdLets -AllowClobber | Out-Null
 }
 
@@ -436,6 +435,7 @@ function Set-ExpireDate {
   Set-ADUser -Identity $_.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
  }
 }
+
 function Set-AccountExpirations ($escapeData) {
  $escapeData | Find-MissingExpireDate | Set-ExpireDate
 }
@@ -464,6 +464,7 @@ function Disable-Expired ($adData) {
  Set-MSOLLicense |
  Remove-FromO365Groups |
  Remove-O365Forwarding |
+ Suspend-GSuiteAccount |
  Disable-GSuiteForwarding |
  Format-EmailDisabled |
  Send-AlertEmail
