@@ -193,7 +193,7 @@ function Get-EscapeRetired {
 function New-ADSession {
  Write-Host ('{0},{1},Creating AD Domain Controller Session' -f $MyInvocation.MyCommand.Name, $DomainController) -Fore Green
  $adSession = New-PSSession -ComputerName $DomainController -Credential $ActiveDirectoryCredential
- $adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Remove-ADObject' , 'Remove-ADGroupMember'
+ $adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Remove-ADObject' , 'Remove-ADGroupMember', 'Set-ADAccountPassword'
  Import-PSSession -Session $adSession -Module 'ActiveDirectory' -CommandName $adCmdLets -AllowClobber | Out-Null
 }
 
