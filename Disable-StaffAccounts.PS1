@@ -80,7 +80,8 @@ function ConvertTo-PSDate {
 
 function Disable-ADAccount {
  process {
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId , $_.mail ) -Fore DarkYellow
+  $msgData = $MyInvocation.MyCommand.name, $_.employeeId , $_.mail, $_.AccountExpirationDate
+  Write-Host ('{0},{1},{2},{3}' -f $msgData ) -Fore DarkYellow
   Write-Debug 'Proceed?'
   Set-ADUser -Identity $_.ObjectGUID -Enabled:$false -Confirm:$false -WhatIf:$WhatIf
   $_
