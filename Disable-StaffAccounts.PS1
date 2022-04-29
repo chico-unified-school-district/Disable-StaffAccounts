@@ -2,9 +2,10 @@
 <#
 .SYNOPSIS
 .DESCRIPTION
- Set Expiration dates on exiting staff accounts, sends emails to accounts with upcoming expiration,
- disables expired accounts, and removes accounts expired for x months.
- An email is sent to users warning them of the impending expiration.
+-Set expiration dates for retired/terminated employee user accounts.
+-Sends expiration notifications to users with expiring accounts.
+-Disables expired accounts.
+-Removes accounts expired for over x months
 .EXAMPLE
 .INPUTS
 .OUTPUTS
@@ -64,10 +65,10 @@ param (
  [SWITCH]$WhatIf
 )
 
-function Clear-Resources {
- $MyInvocation.MyCommand.name
- Get-Module -name *tmp* | Remove-Module -Confirm:$false -Force -Verbose:$false
- Get-PSSession | Remove-PSSession -Confirm:$false -Verbose:$false
+function New-ExchangeOnlineSession {
+ $sessions = Get-PSSession
+ if ($sessions.name -match 'ExchangeOnline') { return }
+ Connect-ExchangeOnline -Credential $ExchangeOnlineCredentials
 }
 
 function ConvertTo-PSDate {
@@ -81,7 +82,7 @@ function ConvertTo-PSDate {
 function Disable-ADAccount {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.employeeId , $_.mail, $_.AccountExpirationDate
-  Write-Host ('{0},{1},{2},{3}' -f $msgData ) -Fore DarkYellow
+  Write-Host ('{0},{1},{2},AccountExpirationDate [{3}]' -f $msgData ) -Fore DarkYellow
   Write-Debug 'Proceed?'
   Set-ADUser -Identity $_.ObjectGUID -Enabled:$false -Confirm:$false -WhatIf:$WhatIf
   $_
@@ -93,9 +94,10 @@ function Disable-GSuiteForwarding {
   $gam = '.\bin\gam-64\gam.exe'
  }
  process {
+  TODO Broken scope access denied nightmare
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.employeeId , $_.homepage ) -Fore DarkYellow
-  if ($WhatIf) { Write-Host ("& $gam user {0} forward off" -f $_.homepage) -Fore Blue }
-  else { & $gam user $_.homepage forward off }
+  Write-Host ("& $gam user {0} forward off" -f $_.homepage) -Fore Yello
+  if (-not$WhatIf) { & $gam user $_.homepage forward off }
   $_
  }
 }
@@ -124,6 +126,8 @@ function Format-EmailExpiring {
    subject = 'CUSD Account Expiring - {0}' -f $endDate
    body    = $html
   }
+  $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
+  Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
   Write-Verbose ($emailParams | Out-String )
   Write-Verbose ($emailParams.body | Out-String )
   $emailParams
@@ -142,6 +146,8 @@ function Format-EmailDisabled {
   }
   Write-Verbose ($emailParams | Out-String )
   Write-Verbose ($emailParams.body | Out-String )
+  $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
+  Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
   $emailParams
  }
 }
@@ -155,6 +161,8 @@ function Format-EmailRemoved {
    subject = 'CUSD Account Removed - {0}' -f $_.mail
    body    = $html
   }
+  $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
+  Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
   Write-Verbose ($emailParams | Out-String )
   Write-Verbose ($emailParams.body | Out-String )
   $emailParams
@@ -222,9 +230,18 @@ function Remove-EscapeEmailWork {
   $baseSql = 'UPDATE HREmployment SET EmailWork = NULL WHERE EmpID = {0}'
  }
  process {
+  if (-not$_.employeeID) {
+   Write-Error '{0},{1},Missing critical data' -f $MyInvocation.MyCommand.Name
+   return
+  }
   $sql = $baseSql -f $_.employeeID
-  Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $sql) -Fore DarkYellow
-  if (-not$WhatIf) { Invoke-Sqlcmd @EscapeParams -Query $sql }
+  if ($sql -match $id) {
+   Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $sql) -Fore DarkYellow
+   if (-not$WhatIf) { Invoke-Sqlcmd @EscapeParams -Query $sql }
+  }
+  else {
+   Write-Error '{0},{1},Missing critical data' -f $MyInvocation.MyCommand.Name
+  }
   $_
  }
 }
@@ -234,14 +251,26 @@ function Remove-GSuiteAccount {
   $gam = '.\bin\gam-64\gam.exe'
  }
  process {
+  if (-not$_.homePage) {
+   Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -Fore Red
+  }
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
-  if ($WhatIf) { Write-Host ("& $gam delete user {0}" -f $_.homepage) }
-  else { & $gam delete user $_.homepage }
+  Write-Host ("{0},{1},& $gam delete user {2}" -f $MyInvocation.MyCommand.Name, $_.employeeId, $_.homepage) -Fore Yellow
+  if (-not$WhatIf) {
+   ($result = & $gam delete user $_.homepage)*>.\null
+   $msgData = $MyInvocation.MyCommand.Name, $_.employeeId, ( $result | Out-String )
+   Write-Host ('{0},{1},{2}' -f $msgData ) -Fore Red
+  }
   $_
  }
 }
 
 function Remove-MsolAccount {
+ begin {
+  $msolCon = Get-MsolDomain -ErrorVariable msolVar -ErrorAction SilentlyContinue
+  if ($msolVar) { Write-Warning ($msolVar | Out-String) }
+  if (-not$msolCon) { Connect-MSOLService -Credential $MSOLCredentials }
+ }
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
   if (-not$WhatIf) { Get-MSolUser -UserPrincipalName $_.mail | Remove-MsolUser -Force }
@@ -260,12 +289,13 @@ function Remove-StaffADObject {
 }
 
 function Remove-FromO365Groups {
+ begin { New-ExchangeOnlineSession }
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
   $mail = $_.mail
-  $msoUser = Get-User -Filter "UserPrincipalName -eq `'$mail`'"
-  if ($msoUser) {
-   $groups = Get-Recipient -Filter "Members -eq `'$($msoUser.DistinguishedName)`'"
+  $exchUser = Get-User -Filter "UserPrincipalName -eq `'$mail`'"
+  if ($exchUser) {
+   $groups = Get-Recipient -Filter "Members -eq `'$($exchUser.DistinguishedName)`'"
    if ($groups) {
     foreach ($group in $groups) {
      Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $group.name) -Fore DarkYellow
@@ -292,16 +322,29 @@ function Remove-FromO365Groups {
 }
 
 function Remove-O365Forwarding {
+ begin { New-ExchangeOnlineSession }
  process {
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
   $mailBoxParams = @{
    DeliverToMailboxAndForward = $false
-   ForwardingSmtpAddress      = $null
-   ForwardingAddress          = $null
+   # WarningAction              = 'Ignore'
+   # WarningVariable            = 'setExoWarn'
    WhatIf                     = $WhatIf
   }
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
   $filter = "UserPrincipalName -eq `'{0}`'" -f $_.mail
-  Get-EXOMailbox -Filter $filter | Set-MailBox @mailBoxParams
+  $mailbox = Get-Mailbox -Filter $filter
+  if ($mailbox.ForwardingAddress -match '[A-Za-z0-9]') {
+   $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $mailbox.ForwardingAddress
+   Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore DarkYellow
+   $mailBoxParams.ForwardingAddress = $null
+   Get-EXOMailbox -Filter $filter | Set-MailBox @mailBoxParams
+  }
+  if ($mailbox.ForwardingSmtpAddress -match '[A-Za-z0-9]') {
+   $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $mailbox.ForwardingSmtpAddress
+   Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore DarkYellow
+   $mailBoxParams.ForwardingSmtpAddress = $null
+   Get-EXOMailbox -Filter $filter | Set-MailBox @mailBoxParams
+  }
   $_
  }
 }
@@ -389,6 +432,9 @@ function Set-ExtensionAttribute1 {
 }
 
 function Set-MSOLLicense {
+ begin {
+  Connect-MSOLService -Credential $MSOLCredentials
+ }
  process {
   $upn = $_.UserPrincipalName
   $msolData = Get-MsolUser -UserPrincipalName $upn | Where-Object { $_.IsLicensed -eq $True }
@@ -426,8 +472,11 @@ function Suspend-GSuiteAccount {
  }
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
-  if ($WhatIf) { Write-Host ("& $gam update user {0} suspended on" -f $_.homepage) }
-  else { & $gam update user $_.homepage suspended on }
+  Write-Host ("{0},& $gam update user {0} suspended on" -f $MyInvocation.MyCommand.name, $_.homepage) -Fore Yellow
+  if (-not$WhatIf) {
+   ($result = & $gam update user $_.homepage suspended on)*>null
+   Write-Host $result -Fore DarkCyan
+  }
   $_
  }
 }
@@ -441,6 +490,10 @@ function Set-ExpireDate {
  }
 }
 
+function Show-Processed {
+ Write-Host ( $_ | Out-String ) -Fore Green
+}
+
 function Set-AccountExpirations ($escapeData) {
  $escapeData | Find-MissingExpireDate | Set-ExpireDate
 }
@@ -452,9 +505,9 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
- Connect-MSOLService -Credential $MSOLCredentials
- Connect-ExchangeOnline -Credential $ExchangeOnlineCredentials
- Connect-AzureAD -Credential $AzureADCredentials
+ # Connect-MSOLService -Credential $MSOLCredentials
+ New-ExchangeOnlineSession
+ # Connect-AzureAD -Credential $AzureADCredentials
  $expiredAccounts = $adData | Select-CurrentlyExpired
  $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
  Write-Verbose ($verboseList | Out-String)
@@ -470,15 +523,15 @@ function Disable-Expired ($adData) {
  Remove-FromO365Groups |
  Remove-O365Forwarding |
  Suspend-GSuiteAccount |
- Disable-GSuiteForwarding |
  Format-EmailDisabled |
- Send-AlertEmail
+ Send-AlertEmail |
+ Show-Processed
 }
 
 function Remove-OldAccounts($adData) {
  $expired18Months = $adData | Select-Expired18Months
  $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
- Write-Verbose ($verboseList | Out-String)
+ Write-Verbose ( $verboseList | Out-String )
  $expired18Months |
  Remove-StaffADObject |
  Remove-MsolAccount |
@@ -497,6 +550,8 @@ function Remove-OldAccounts($adData) {
 
 # Main ==========================================================================
 Show-TestRun
+'Setting ErrorActionPreference'
+$ErrorActionPreference = 'Stop'
 Clear-SessionData
 
 'MSOnline', 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
