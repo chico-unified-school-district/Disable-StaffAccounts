@@ -505,9 +505,9 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
- # Connect-MSOLService -Credential $MSOLCredentials
+ Connect-MSOLService -Credential $MSOLCredentials
  New-ExchangeOnlineSession
- # Connect-AzureAD -Credential $AzureADCredentials
+ Connect-AzureAD -Credential $AzureADCredentials
  $expiredAccounts = $adData | Select-CurrentlyExpired
  $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
  Write-Verbose ($verboseList | Out-String)
@@ -532,6 +532,7 @@ function Remove-OldAccounts($adData) {
  $expired18Months = $adData | Select-Expired18Months
  $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
  Write-Verbose ( $verboseList | Out-String )
+ Write-Host ( 'Count: {0}' -f $expired18Months.count ) -Fore Green
  $expired18Months |
  Remove-StaffADObject |
  Remove-MsolAccount |
