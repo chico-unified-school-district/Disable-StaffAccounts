@@ -14,7 +14,7 @@ WHERE
  PersonTypeId IN (1,2,4)
  AND
  -- R: Retired T: Terminated
- EmploymentStatusCode IN ('R','T','I')
+ EmploymentStatusCode IN ('R','T')
  AND
  EmailWork LIKE '%@chicousd.org'
  AND
