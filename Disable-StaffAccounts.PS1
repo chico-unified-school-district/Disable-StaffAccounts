@@ -481,12 +481,32 @@ function Suspend-GSuiteAccount {
  }
 }
 
+# function Set-ExpireDate {
+#  begin { $expireDate = (Get-Date).AddDays(14) }
+#  process {
+#   $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $expireDate
+#   Write-Host ('{0},{1},{2},{3}' -f $msgData) -Fore DarkYellow
+#   Set-ADUser -Identity $_.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
+#  }
+# }
 function Set-ExpireDate {
- begin { $expireDate = (Get-Date).AddDays(14) }
  process {
-  $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $expireDate
+  $id = $_.employeeId
+  $escUser = $global:escapeRetired.Where({ [int]$_.empId -eq [int]$id })
+  $expireDate = (Get-Date).AddDays(30)
+  $dtld = $escUser.DateTerminationLastDay
+  $dt = $escUser.DateTermination
+  if ($dtld -match '\d') { $expireDate = Get-Date $dtld }
+  if ($dt -match '\d') {
+   $date2 = Get-Date $dt
+   if ($date2 -gt $date1) {
+    $expireDate = $date2
+   }
+  }
+  $expireDate2 = (Get-Date $expireDate).AddDays(30)
+  $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $expireDate2
   Write-Host ('{0},{1},{2},{3}' -f $msgData) -Fore DarkYellow
-  Set-ADUser -Identity $_.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
+  Set-ADUser -Identity $_.ObjectGUID -AccountExpirationDate $expireDate2 -Confirm:$false -WhatIf:$WhatIf
  }
 }
 
@@ -494,14 +514,14 @@ function Show-Processed {
  Write-Host ( $_ | Out-String ) -Fore Green
 }
 
-function Set-AccountExpirations ($escapeData) {
- $escapeData | Find-MissingExpireDate | Set-ExpireDate
+function Set-AccountExpirations {
+ $global:escapeRetired | Find-MissingExpireDate | Set-ExpireDate | Show-Processed
 }
 
 function Send-ExpirationEmails ($adData) {
  $expiringSoon = $adData | Select-ExpiringAccounts
  Write-Host ( 'Count: {0}' -f $expiringSoon.count ) -Fore Green
- $expiringSoon | Format-EmailExpiring | Send-AlertEmail
+ $expiringSoon | Format-EmailExpiring | Send-AlertEmail | Show-Processed
 }
 
 function Disable-Expired ($adData) {
@@ -539,7 +559,8 @@ function Remove-OldAccounts($adData) {
  Remove-GSuiteAccount |
  Remove-EscapeEmailWork |
  Format-EmailRemoved |
- Send-AlertEmail
+ Send-AlertEmail |
+ Show-Processed
 }
 
 . .\lib\Clear-SessionData.ps1
@@ -558,12 +579,12 @@ Clear-SessionData
 'MSOnline', 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
 New-ADSession
 
-$escapeRetired = Get-EscapeRetired
+$global:escapeRetired = Get-EscapeRetired
 $expiringADAccounts = Get-AccountsWithExpirationDate
 
 if ($SetAccountExpirations) {
  Show-BlockInfo 'Set Account Expirations'
- Set-AccountExpirations $escapeRetired
+ Set-AccountExpirations
 }
 if ($SendAccountExpirationEmails) {
  Show-BlockInfo 'Send Account Expiration Emails'
