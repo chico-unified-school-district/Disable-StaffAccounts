@@ -1,4 +1,3 @@
-#Requires -Version 5.0
 <#
 .SYNOPSIS
 .DESCRIPTION
@@ -15,7 +14,6 @@ https://adamtheautomator.com/jenkins-powershll-64bit/
 Vasil Michev
 https://www.michev.info/Blog/Post/1655/quickly-list-all-groups-a-user-is-member-of-or-owner-of-in-office-365
 #>
-
 [cmdletbinding()]
 param (
   [Parameter(Mandatory = $True)]
