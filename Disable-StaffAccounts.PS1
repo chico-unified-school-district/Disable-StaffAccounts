@@ -296,7 +296,7 @@ function Remove-UGNReference {
   }
   process {
     $removeFromUGN = "DELETE FROM UGN WHERE SID = {0}" -f $_.employeeId
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $updateSTF)
+    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $removeFromUGN)
     if (-not($WhatIf)) { Invoke-SQLCmd @SISParams -Query $removeFromUGN }
     $_
   }
