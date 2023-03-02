@@ -281,7 +281,12 @@ function Remove-StaffADObject {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $_.AccountExpirationDate
     Write-Host ('{0},{1},{2},Expired {3}' -f $msgData) -Fore DarkYellow
     Write-Debug 'Proceed?'
-    Remove-ADObject $_.ObjectGUID -Recursive -Confirm:$false -WhatIf:$WhatIf
+    Remove-ADObject $_.ObjectGUID -Recursive -Confirm:$false -WhatIf:$WhatIf -ErrorVariable adRemoved
+    if ($adRemoved) {
+      Write-Host ( $adRemoved | Out-String)
+      Write-Host ('{0},{1},{2},Recursive Delete Failed. Trying Non-recursive {3}' -f $msgData) -Fore DarkYellow
+      Remove-ADObject $_.ObjectGUID -Confirm:$false -WhatIf:$WhatIf
+    }
     $_
   }
 }
@@ -395,7 +400,7 @@ function Send-AlertEmail {
   process {
     $mailParams = @{
       To         = $_.to
-      From       = $EmailCredential.Username
+      From       = '<{0}>' -f $EmailCredential.Username
       Subject    = $_.subject
       bodyAsHTML = $true
       Body       = $_.body
@@ -545,7 +550,7 @@ function Disable-Expired ($adData) {
   Set-ExtensionAttribute1 |
   Remove-ADGroupMemberships |
   Set-AeriesSTFStatus |
-  Set-MSOLLicense |
+  # Set-MSOLLicense |
   Remove-FromO365Groups |
   Remove-O365Forwarding |
   Suspend-GSuiteAccount |
@@ -555,6 +560,7 @@ function Disable-Expired ($adData) {
 }
 
 function Remove-OldAccounts($adData) {
+  Connect-MSOLService -Credential $MSOLCredentials
   $expired18Months = $adData | Select-Expired18Months
   $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ( $verboseList | Out-String )

@@ -17,3 +17,4 @@ ehthumbs.db
 
 # Folder config file
 *.Desktop.ini
+/bin/gam-64/gam.exe
