@@ -411,7 +411,7 @@ function Send-AlertEmail {
     }
     if ($BccAddress) { $mailParams += @{Bcc = $BccAddress } }
 
-    if (-not$WhatIf) { Send-MailMessage @mailParams }
+    if (-not$WhatIf) { Send-MailMessage @mailParams.Subject }
     $msgData = $MyInvocation.MyCommand.name, ($_.to -join ','), $_.subject
     Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $msgData) -Fore Green
   }
