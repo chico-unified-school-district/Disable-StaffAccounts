@@ -18,3 +18,6 @@ ehthumbs.db
 # Folder config file
 *.Desktop.ini
 /bin/gam-64/gam.exe
+/bin/client_secrets.json
+/bin/oauth2.txt
+/bin/oauth2service.json
