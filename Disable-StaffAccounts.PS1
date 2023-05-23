@@ -24,9 +24,9 @@ param (
   [System.Management.Automation.PSCredential]$ActiveDirectoryCredential,
   [Parameter(Mandatory = $True)]
   [string]$StaffOU = 'OU=Employees,OU=Users,OU=Domain_Root,DC=chico,DC=usd',
-  [Parameter(Mandatory = $True)]
-  [Alias('MSCred')]
-  [System.Management.Automation.PSCredential]$MSOLCredentials,
+  # [Parameter(Mandatory = $True)]
+  # [Alias('MSCred')]
+  # [System.Management.Automation.PSCredential]$MSOLCredentials,
   [Parameter(Mandatory = $True)]
   [Alias('License')]
   [string]$DefaultLicenseSkuID,
@@ -263,18 +263,18 @@ function Remove-GSuiteAccount {
   }
 }
 
-function Remove-MsolAccount {
-  begin {
-    $msolCon = Get-MsolDomain -ErrorVariable msolVar -ErrorAction SilentlyContinue
-    if ($msolVar) { Write-Warning ($msolVar | Out-String) }
-    if (-not$msolCon) { Connect-MSOLService -Credential $MSOLCredentials }
-  }
-  process {
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
-    if (-not$WhatIf) { Get-MSolUser -UserPrincipalName $_.mail | Remove-MsolUser -Force }
-    $_
-  }
-}
+# function Remove-MsolAccount {
+#   begin {
+#     $msolCon = Get-MsolDomain -ErrorVariable msolVar -ErrorAction SilentlyContinue
+#     if ($msolVar) { Write-Warning ($msolVar | Out-String) }
+#     if (-not$msolCon) { Connect-MSOLService -Credential $MSOLCredentials }
+#   }
+#   process {
+#     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
+#     if (-not$WhatIf) { Get-MSolUser -UserPrincipalName $_.mail | Remove-MsolUser -Force }
+#     $_
+#   }
+# }
 
 function Remove-StaffADObject {
   process {
@@ -450,29 +450,18 @@ function Set-ExtensionAttribute1 {
   }
 }
 
-function Set-MSOLLicense {
-  begin {
-    Connect-MSOLService -Credential $MSOLCredentials
-  }
+function Set-ExtensionAttribute2 {
   process {
-    $upn = $_.UserPrincipalName
-    $msolData = Get-MsolUser -UserPrincipalName $upn | Where-Object { $_.IsLicensed -eq $True }
-    if ($msolData) {
-      if ($msoldata.Licenses.AccountSkuId -ne $DefaultLicenseSkuID) {
-        Write-Host ('{0},{1},{2},Removing {3}' -f $upn, $MyInvocation.MyCommand.name, $_.employeeId, ($msoldata.Licenses.AccountSkuId -join ','))
-        Write-Host ('{0},{1},{2},Adding {3}' -f $upn, $MyInvocation.MyCommand.name, $_.employeeId, $DefaultLicenseSkuID)
-        if (-not$WhatIf) {
-          Set-MsolUserLicense -UserPrincipalName $upn -RemoveLicenses $msoldata.Licenses.AccountSkuId
-          Set-MsolUserLicense -UserPrincipalName $upn -AddLicenses $DefaultLicenseSkuID
-        }
-      }
-      else {
-        $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $upn, $DefaultLicenseSkuID
-        Write-Host ('{0},{1},{2},Licensing already correct [{3}]. Skipping.' -f $msgData) -Fore DarkYellow
-      }
+    # In Azure, Dynamic Groups are used to assign licenses. We use the local 'extensionAttribute2' for this purpose.
+    $extAtt2 = { 'A5staff' }
+    $params = @{
+      Identity = $_.ObjectGUID
+      Add      = @{extensionAttribute2 = $extAtt2 }
+      Confirm  = $false
+      WhatIf   = $WhatIf
     }
-    else { Write-Host ('{0},{1}, No MSOnline License Present' -f $_.mail, $MyInvocation.MyCommand.name) }
-    $_
+    Write-Host ('{0},extensionAttribute2 = [{1}]' -f $MyInvocation.MyCommand.Name, $extAtt2 )
+    Set-ADUser @params
   }
 }
 
@@ -536,7 +525,7 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
-  Connect-MSOLService -Credential $MSOLCredentials
+  # Connect-MSOLService -Credential $MSOLCredentials
   New-ExchangeOnlineSession
   Connect-AzureAD -Credential $AzureADCredentials
   $expiredAccounts = $adData | Select-CurrentlyExpired
@@ -548,9 +537,9 @@ function Disable-Expired ($adData) {
   Set-RandomPassword |
   Set-AddressListVisability |
   Set-ExtensionAttribute1 |
+  Set-ExtensionAttribute2 |
   Remove-ADGroupMemberships |
   Set-AeriesSTFStatus |
-  # Set-MSOLLicense |
   Remove-FromO365Groups |
   Remove-O365Forwarding |
   Suspend-GSuiteAccount |
@@ -560,7 +549,7 @@ function Disable-Expired ($adData) {
 }
 
 function Remove-OldAccounts($adData) {
-  Connect-MSOLService -Credential $MSOLCredentials
+  # Connect-MSOLService -Credential $MSOLCredentials
   $expired18Months = $adData | Select-Expired18Months
   $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ( $verboseList | Out-String )
@@ -568,7 +557,6 @@ function Remove-OldAccounts($adData) {
   $expired18Months |
   Remove-StaffADObject |
   Remove-UGNReference |
-  Remove-MsolAccount |
   Remove-GSuiteAccount |
   Remove-EscapeEmailWork |
   Format-EmailRemoved |
