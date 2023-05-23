@@ -66,7 +66,7 @@ param (
 function New-ExchangeOnlineSession {
   $sessions = Get-PSSession
   if ($sessions.name -match 'ExchangeOnline') { return }
-  Connect-ExchangeOnline -Credential $ExchangeOnlineCredentials
+  Connect-ExchangeOnline -Credential $ExchangeOnlineCredentials -ShowBanner:$false
 }
 
 function ConvertTo-PSDate {
