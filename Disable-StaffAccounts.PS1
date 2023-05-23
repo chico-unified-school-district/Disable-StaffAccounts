@@ -127,7 +127,7 @@ function Format-EmailExpiring {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
     Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
     Write-Verbose ($emailParams | Out-String )
-    Write-Verbose ($emailParams.body | Out-String )
+    # Write-Verbose ($emailParams.body | Out-String )
     $emailParams
   }
 }
