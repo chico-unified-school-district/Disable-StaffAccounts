@@ -143,7 +143,7 @@ function Format-EmailDisabled {
       body    = $html
     }
     Write-Verbose ($emailParams | Out-String )
-    Write-Verbose ($emailParams.body | Out-String )
+    # Write-Verbose ($emailParams.body | Out-String )
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
     Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
     $emailParams
@@ -162,7 +162,7 @@ function Format-EmailRemoved {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
     Write-Host ('{0},{1},{2}' -f $msgData ) -Fore DarkBlue
     Write-Verbose ($emailParams | Out-String )
-    Write-Verbose ($emailParams.body | Out-String )
+    # Write-Verbose ($emailParams.body | Out-String )
     $emailParams
   }
 }
@@ -411,7 +411,7 @@ function Send-AlertEmail {
     }
     if ($BccAddress) { $mailParams += @{Bcc = $BccAddress } }
 
-    if (-not$WhatIf) { Send-MailMessage @mailParams.Subject }
+    if (-not$WhatIf) { Send-MailMessage @mailParams }
     $msgData = $MyInvocation.MyCommand.name, ($_.to -join ','), $_.subject
     Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $msgData) -Fore Green
   }
