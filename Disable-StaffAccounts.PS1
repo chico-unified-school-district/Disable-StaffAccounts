@@ -263,19 +263,6 @@ function Remove-GSuiteAccount {
   }
 }
 
-# function Remove-MsolAccount {
-#   begin {
-#     $msolCon = Get-MsolDomain -ErrorVariable msolVar -ErrorAction SilentlyContinue
-#     if ($msolVar) { Write-Warning ($msolVar | Out-String) }
-#     if (-not$msolCon) { Connect-MSOLService -Credential $MSOLCredentials }
-#   }
-#   process {
-#     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
-#     if (-not$WhatIf) { Get-MSolUser -UserPrincipalName $_.mail | Remove-MsolUser -Force }
-#     $_
-#   }
-# }
-
 function Remove-StaffADObject {
   process {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $_.AccountExpirationDate
@@ -450,20 +437,20 @@ function Set-ExtensionAttribute1 {
   }
 }
 
-function Set-ExtensionAttribute2 {
-  process {
-    # In Azure, Dynamic Groups are used to assign licenses. We use the local 'extensionAttribute2' for this purpose.
-    $extAtt2 = { 'A5staff' }
-    $params = @{
-      Identity = $_.ObjectGUID
-      Add      = @{extensionAttribute2 = $extAtt2 }
-      Confirm  = $false
-      WhatIf   = $WhatIf
-    }
-    Write-Host ('{0},extensionAttribute2 = [{1}]' -f $MyInvocation.MyCommand.Name, $extAtt2 )
-    Set-ADUser @params
-  }
-}
+# function Set-ExtensionAttribute2 {
+#   process {
+#     # In Azure, Dynamic Groups are used to assign licenses. We use the local 'extensionAttribute2' for this purpose.
+#     $extAtt2 = { 'A5staff' }
+#     $params = @{
+#       Identity = $_.ObjectGUID
+#       Add      = @{extensionAttribute2 = $extAtt2 }
+#       Confirm  = $false
+#       WhatIf   = $WhatIf
+#     }
+#     Write-Host ('{0},extensionAttribute2 = [{1}]' -f $MyInvocation.MyCommand.Name, $extAtt2 )
+#     Set-ADUser @params
+#   }
+# }
 
 function Set-RandomPassword {
   process {
@@ -537,7 +524,7 @@ function Disable-Expired ($adData) {
   Set-RandomPassword |
   Set-AddressListVisability |
   Set-ExtensionAttribute1 |
-  Set-ExtensionAttribute2 |
+  # Set-ExtensionAttribute2 |
   Remove-ADGroupMemberships |
   Set-AeriesSTFStatus |
   Remove-FromO365Groups |
