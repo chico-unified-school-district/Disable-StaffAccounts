@@ -1,12 +1,7 @@
-/logs
-/bin/gam-64/oauth2service.json
-/bin/gam-64/oauth2.txt
-/bin/gam-64/client_secrets.json
-/bin/gam-64/LICENSE
-*.desktop.ini
 /.vscode
 /jenkins.ps1
 /notes.ps1
+/params.ps1
 
 #VS Code Files
 *.vscode
@@ -16,8 +11,7 @@ Thumbs.db
 ehthumbs.db
 
 # Folder config file
+/logs
 *.Desktop.ini
-/bin/gam-64/gam.exe
-/bin/client_secrets.json
 /bin/oauth2.txt
-/bin/oauth2service.json
+/bin/roots.pem
