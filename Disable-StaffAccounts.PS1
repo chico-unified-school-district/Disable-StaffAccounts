@@ -597,7 +597,12 @@ Clear-SessionData
 
 'MSOnline', 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
 $dc = Select-DomainController $DomainControllers
-$adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Remove-ADObject' , 'Remove-ADGroupMember', 'Set-ADAccountPassword'
+$adCmdLets = 'Get-ADUser',
+'Set-ADUser',
+'Remove-ADObject' ,
+'Remove-ADGroupMember',
+'Set-ADAccountPassword' ,
+'Set-ADObject'
 New-ADSession -dc $dc -cmdlets $adCmdLets -cred $ActiveDirectoryCredential
 
 $global:escapeRetired = Get-EscapeRetired
