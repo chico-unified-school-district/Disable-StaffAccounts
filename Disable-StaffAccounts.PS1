@@ -89,7 +89,7 @@ function Disable-ADAccount {
 
 function Disable-GSuiteForwarding {
   begin {
-    $gam = '.\bin\gam-64\gam.exe'
+    $gam = '.\bin\gam.exe'
   }
   process {
     TODO Broken scope access denied nightmare
@@ -246,16 +246,22 @@ function Remove-EscapeEmailWork {
 
 function Remove-GSuiteAccount {
   begin {
-    $gam = '.\bin\gam-64\gam.exe'
+    $gam = '.\bin\gam.exe'
   }
   process {
     if (-not$_.homePage) {
       Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -Fore Red
     }
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
+    # Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
+    ($gamUser = & $gam info user $_.homepage)*>$null
+    if (-not$gamUser) {
+      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -Fore DarkYellow
+      $_
+      return
+    }
     Write-Host ("{0},{1},& $gam delete user {2}" -f $MyInvocation.MyCommand.Name, $_.employeeId, $_.homepage) -Fore Yellow
     if (-not$WhatIf) {
-   ($result = & $gam delete user $_.homepage)*>.\null
+     ($result = & $gam delete user $_.homepage)*>$null
       $msgData = $MyInvocation.MyCommand.Name, $_.employeeId, ( $result | Out-String )
       Write-Host ('{0},{1},{2}' -f $msgData ) -Fore Red
     }
@@ -268,11 +274,16 @@ function Remove-StaffADObject {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $_.AccountExpirationDate
     Write-Host ('{0},{1},{2},Expired {3}' -f $msgData) -Fore DarkYellow
     Write-Debug 'Proceed?'
-    Remove-ADObject $_.ObjectGUID -Recursive -Confirm:$false -WhatIf:$WhatIf -ErrorVariable adRemoved
+    $removeParams = @{
+      Identity = $_.ObjectGUID
+      Confirm  = $False
+      WhatIf   = $WhatIf
+    }
+    Remove-ADObject @removeParams -Recursive -ErrorVariable 'adRemoved' -ErrorAction SilentlyContinue
     if ($adRemoved) {
       Write-Host ( $adRemoved | Out-String)
       Write-Host ('{0},{1},{2},Recursive Delete Failed. Trying Non-recursive {3}' -f $msgData) -Fore DarkYellow
-      Remove-ADObject $_.ObjectGUID -Confirm:$false -WhatIf:$WhatIf
+      Remove-ADObject @removeParams -ErrorAction Stop
     }
     $_
   }
@@ -288,7 +299,7 @@ function Remove-UGNReference {
   }
   process {
     $removeFromUGN = "DELETE FROM UGN WHERE SID = {0}" -f $_.employeeId
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $removeFromUGN)
+    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $removeFromUGN) -Fore Yellow
     if (-not($WhatIf)) { Invoke-SQLCmd @SISParams -Query $removeFromUGN }
     $_
   }
@@ -463,7 +474,7 @@ function Set-RandomPassword {
 
 function Suspend-GSuiteAccount {
   begin {
-    $gam = '.\bin\gam-64\gam.exe'
+    $gam = '.\bin\gam.exe'
   }
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
@@ -535,6 +546,23 @@ function Disable-Expired ($adData) {
   Show-Processed
 }
 
+function Disable-PreventAccidentalDelete {
+  begin {
+  }
+  process {
+    Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.mail) -Fore Yellow
+    $prevParams = @{
+      Identity                        = $_.ObjectGUID
+      ProtectedFromAccidentalDeletion = $False
+      Confirm                         = $False
+      ErrorAction                     = 'Stop'
+      WhatIf                          = $WhatIf
+    }
+    Set-ADObject @prevParams
+    $_
+  }
+}
+
 function Remove-OldAccounts($adData) {
   # Connect-MSOLService -Credential $MSOLCredentials
   $expired18Months = $adData | Select-Expired18Months
@@ -542,6 +570,7 @@ function Remove-OldAccounts($adData) {
   Write-Verbose ( $verboseList | Out-String )
   Write-Host ( 'Count: {0}' -f $expired18Months.count ) -Fore Green
   $expired18Months |
+  Disable-PreventAccidentalDelete |
   Remove-StaffADObject |
   Remove-UGNReference |
   Remove-GSuiteAccount |
@@ -562,8 +591,8 @@ function Remove-OldAccounts($adData) {
 
 # Main ==========================================================================
 Show-TestRun
-'Setting ErrorActionPreference'
-$ErrorActionPreference = 'Stop'
+# 'Setting ErrorActionPreference'
+# $ErrorActionPreference = 'Stop'
 Clear-SessionData
 
 'MSOnline', 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
