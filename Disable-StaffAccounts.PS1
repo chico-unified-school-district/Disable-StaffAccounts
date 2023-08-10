@@ -234,7 +234,7 @@ function Remove-EscapeEmailWork {
     }
     $sql = $baseSql -f $_.employeeID
     if ($sql -match $id) {
-      Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $sql) -Fore DarkYellow
+      Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $sql) -Fore Yellow
       if (-not$WhatIf) { Invoke-Sqlcmd @EscapeParams -Query $sql }
     }
     else {
@@ -252,10 +252,9 @@ function Remove-GSuiteAccount {
     if (-not$_.homePage) {
       Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -Fore Red
     }
-    # Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -Fore DarkYellow
     ($gamUser = & $gam info user $_.homepage)*>$null
     if (-not$gamUser) {
-      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -Fore DarkYellow
+      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -Fore Yellow
       $_
       return
     }
@@ -272,18 +271,18 @@ function Remove-GSuiteAccount {
 function Remove-StaffADObject {
   process {
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $_.AccountExpirationDate
-    Write-Host ('{0},{1},{2},Expired {3}' -f $msgData) -Fore DarkYellow
+    Write-Host ('{0},{1},{2},Expired {3}' -f $msgData) -Fore Yellow
     Write-Debug 'Proceed?'
     $removeParams = @{
       Identity = $_.ObjectGUID
       Confirm  = $False
       WhatIf   = $WhatIf
     }
-    Remove-ADObject @removeParams -Recursive -ErrorVariable 'adRemoved' -ErrorAction SilentlyContinue
+    Remove-ADObject @removeParams -ErrorAction SilentlyContinue
     if ($adRemoved) {
       Write-Host ( $adRemoved | Out-String)
-      Write-Host ('{0},{1},{2},Recursive Delete Failed. Trying Non-recursive {3}' -f $msgData) -Fore DarkYellow
-      Remove-ADObject @removeParams -ErrorAction Stop
+      Write-Host ('{0},{1},{2},Recursive Delete Failed. Trying Non-recursive {3}' -f $msgData) -Fore Red
+      Remove-ADObject @removeParams -Recursive -ErrorVariable 'adRemoved' -ErrorAction Stop
     }
     $_
   }
@@ -308,14 +307,15 @@ function Remove-UGNReference {
 function Remove-FromO365Groups {
   begin { New-ExchangeOnlineSession }
   process {
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
+    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore Yellow
     $mail = $_.mail
     $exchUser = Get-User -Filter "UserPrincipalName -eq `'$mail`'"
     if ($exchUser) {
       $groups = Get-Recipient -Filter "Members -eq `'$($exchUser.DistinguishedName)`'"
       if ($groups) {
         foreach ($group in $groups) {
-          Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $group.name) -Fore DarkYellow
+          $msg = $MyInvocation.MyCommand.name, $_.employeeId, $_.UserPrincipalName, $group.name
+          Write-Host ('{0},{1},{2},{3}' -f $msg) -Fore Yellow
           $gpParams = @{
             EmailAddresses = @{remove = "$mail" }
             Confirm        = $False
@@ -341,7 +341,7 @@ function Remove-FromO365Groups {
 function Remove-O365Forwarding {
   begin { New-ExchangeOnlineSession }
   process {
-    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore DarkYellow
+    Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -Fore Yellow
     $mailBoxParams = @{
       DeliverToMailboxAndForward = $false
       # WarningAction              = 'Ignore'
@@ -352,13 +352,13 @@ function Remove-O365Forwarding {
     $mailbox = Get-Mailbox -Filter $filter
     if ($mailbox.ForwardingAddress -match '[A-Za-z0-9]') {
       $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $mailbox.ForwardingAddress
-      Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore DarkYellow
+      Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore Yellow
       $mailBoxParams.ForwardingAddress = $null
       Get-EXOMailbox -Filter $filter | Set-MailBox @mailBoxParams
     }
     if ($mailbox.ForwardingSmtpAddress -match '[A-Za-z0-9]') {
       $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $mailbox.ForwardingSmtpAddress
-      Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore DarkYellow
+      Write-Host ('{0},{1},{2},Removing [{3}]' -f $msgData ) -Fore Yellow
       $mailBoxParams.ForwardingSmtpAddress = $null
       Get-EXOMailbox -Filter $filter | Set-MailBox @mailBoxParams
     }
