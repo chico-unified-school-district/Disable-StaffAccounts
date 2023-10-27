@@ -191,10 +191,11 @@ function Get-AccountsWithExpirationDate {
 
 function Get-EscapeRetired {
   $EscapeParams = @{
-    Server     = $EscapeServer
-    Database   = $EscapeDatabase
-    Credential = $EscapeCredential
-    Query      = (Get-Content -Path '.\sql\retired-terminated.sql' -Raw)
+    Server                 = $EscapeServer
+    Database               = $EscapeDatabase
+    Credential             = $EscapeCredential
+    TrustServerCertificate = $true
+    Query                  = (Get-Content -Path '.\sql\retired-terminated.sql' -Raw)
   }
   $results = Invoke-Sqlcmd @EscapeParams
   Write-Host ( 'Escape Results Count: {0}' -f $results.count ) -F Green
@@ -221,9 +222,10 @@ function Remove-ADGroupMemberships {
 function Remove-EscapeEmailWork {
   begin {
     $EscapeParams = @{
-      Server     = $EscapeServer
-      Database   = $EscapeDatabase
-      Credential = $EscapeCredential
+      Server                 = $EscapeServer
+      Database               = $EscapeDatabase
+      Credential             = $EscapeCredential
+      TrustServerCertificate = $true
     }
     $baseSql = 'UPDATE HREmployment SET EmailWork = NULL WHERE EmpID = {0}'
   }
@@ -297,9 +299,10 @@ function Remove-StaffADObject {
 function Remove-UGNReference {
   begin {
     $SISParams = @{
-      Server     = $SISServer
-      Database   = $SISDatabase
-      Credential = $SISCredential
+      Server                 = $SISServer
+      Database               = $SISDatabase
+      Credential             = $SISCredential
+      TrustServerCertificate = $true
     }
   }
   process {
@@ -433,9 +436,10 @@ function Set-AddressListVisability {
 function Set-AeriesSTFStatus {
   begin {
     $SISParams = @{
-      Server     = $SISServer
-      Database   = $SISDatabase
-      Credential = $SISCredential
+      Server                 = $SISServer
+      Database               = $SISDatabase
+      Credential             = $SISCredential
+      TrustServerCertificate = $true
     }
   }
   process {
