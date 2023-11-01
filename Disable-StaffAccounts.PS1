@@ -281,13 +281,17 @@ function Remove-StaffADObject {
       ErrorAction = 'SilentlyContinue'
       WhatIf      = $WhatIf
     }
+    $objParams = @{
+      Filter = "ObjectGUID -eq '{0}'" -f $_.ObjectGUID
+    }
+    $obj = Get-ADUser @objParams
     Remove-ADUser @removeParams
-    $obj = Get-ADUser -Identity $_.ObjectGUID
+    $obj = Get-ADUser @objParams
     if ($obj) {
       Write-Host ('{0},{1},{2},Delete Failed. Trying -Recursive parameter {3}' -f $msgData) -F Red
       Remove-ADObject @removeParams -Recursive
     }
-    $obj = Get-ADUser -Identity $_.ObjectGUID
+    $obj = Get-ADUser @objParams
     if ($obj -and -not$WhatIf) {
       Write-Host ('{0},{1},{2},Remove-ADUser and Remove-ADObject Failed' -f $msgData) -F Red
       return
@@ -458,21 +462,6 @@ function Set-ExtensionAttribute1 {
   }
 }
 
-# function Set-ExtensionAttribute2 {
-#   process {
-#     # In Azure, Dynamic Groups are used to assign licenses. We use the local 'extensionAttribute2' for this purpose.
-#     $extAtt2 = { 'A5staff' }
-#     $params = @{
-#       Identity = $_.ObjectGUID
-#       Add      = @{extensionAttribute2 = $extAtt2 }
-#       Confirm  = $false
-#       WhatIf   = $WhatIf
-#     }
-#     Write-Host ('{0},extensionAttribute2 = [{1}]' -f $MyInvocation.MyCommand.Name, $extAtt2 )
-#     Set-ADUser @params
-#   }
-# }
-
 function Set-RandomPassword {
   process {
     Write-Host('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F DarkYellow
@@ -531,7 +520,6 @@ function Show-Processed {
     $i++
   }
   end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -F Green }
-
 }
 
 function Set-AccountExpirations {
@@ -540,7 +528,8 @@ function Set-AccountExpirations {
 
 function Send-ExpirationEmails ($adData) {
   $expiringSoon = $adData | Select-ExpiringAccounts
-  Write-Host ( 'Count: {0}' -f $expiringSoon.count ) -F Green
+  $i = ($expiringSoon | Measure-Object).count
+  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i ) -F Green
   $expiringSoon | Format-EmailExpiring | Send-AlertEmail | Show-Processed
 }
 
@@ -551,13 +540,13 @@ function Disable-Expired ($adData) {
   $expiredAccounts = $adData | Select-CurrentlyExpired
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ($verboseList | Out-String)
-  Write-Host ( 'Count: {0}' -f $expiredAccounts.count ) -F Green
+  $i = ($expiredAccounts | Measure-Object).count
+  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i ) -F Green
   $expiredAccounts |
   Disable-ADAccount |
   Set-RandomPassword |
   Set-AddressListVisability |
   Set-ExtensionAttribute1 |
-  # Set-ExtensionAttribute2 |
   Remove-ADGroupMemberships |
   Set-AeriesSTFStatus |
   Remove-FromO365Groups |
@@ -589,14 +578,15 @@ function Remove-OldAccounts($adData) {
   # Connect-MSOLService -Credential $MSOLCredentials
   $expired18Months = $adData | Select-Expired18Months
   $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
+  $i = ($expired18Months | Measure-Object).count
   Write-Verbose ( $verboseList | Out-String )
-  Write-Host ( 'Count: {0}' -f $expired18Months.count ) -F Green
+  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i ) -F Green
   $expired18Months |
-  Disable-PreventAccidentalDelete |
-  Remove-StaffADObject |
   Remove-UGNReference |
   Remove-GSuiteAccount |
   Remove-EscapeEmailWork |
+  Disable-PreventAccidentalDelete |
+  Remove-StaffADObject |
   Format-EmailRemoved |
   Send-AlertEmail |
   Show-Processed
