@@ -318,7 +318,7 @@ function Remove-UGNReference {
 }
 
 function Remove-FromO365Groups {
-  begin { New-ExchangeOnlineSession }
+  # begin { New-ExchangeOnlineSession }
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F Yellow
     $mail = $_.mail
@@ -349,10 +349,11 @@ function Remove-FromO365Groups {
     }
     $_
   }
+  # end { Disconnect-ExchangeOnline -Confirm:$false }
 }
 
 function Remove-O365Forwarding {
-  begin { New-ExchangeOnlineSession }
+  # begin { New-ExchangeOnlineSession }
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F Yellow
     $mailBoxParams = @{
@@ -377,6 +378,7 @@ function Remove-O365Forwarding {
     }
     $_
   }
+  # end { Disconnect-ExchangeOnline -Confirm:$false }
 }
 
 filter Select-CurrentlyExpired {
@@ -534,7 +536,6 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
-  # Connect-MSOLService -Credential $MSOLCredentials
   New-ExchangeOnlineSession
   Connect-AzureAD -Credential $AzureADCredentials
   $expiredAccounts = $adData | Select-CurrentlyExpired
@@ -555,6 +556,8 @@ function Disable-Expired ($adData) {
   Format-EmailDisabled |
   Send-AlertEmail |
   Show-Processed
+
+  Disconnect-ExchangeOnline -Confirm:$false
 }
 
 function Disable-PreventAccidentalDelete {
@@ -575,7 +578,6 @@ function Disable-PreventAccidentalDelete {
 }
 
 function Remove-OldAccounts($adData) {
-  # Connect-MSOLService -Credential $MSOLCredentials
   $expired18Months = $adData | Select-Expired18Months
   $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
   $i = ($expired18Months | Measure-Object).count
