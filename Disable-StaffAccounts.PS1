@@ -254,7 +254,7 @@ function Remove-GSuiteAccount {
     if (-not$_.homePage) {
       Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -F Red
     }
-    ($gamUser = & $gam info user $_.homepage)*>$null
+    ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
     if (-not$gamUser) {
       Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -F Yellow
       $_
