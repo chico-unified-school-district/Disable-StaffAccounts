@@ -176,7 +176,7 @@ function Get-AccountsWithExpirationDate {
     (mail -like "*@*") -and
     (employeeId -like "*")
     }
-    Properties = 'employeeid', 'mail', 'AccountExpirationDate', 'HomePage', 'info', 'memberof'
+    Properties = 'employeeid', 'mail', 'AccountExpirationDate', 'homepage', 'info', 'memberof'
     SearchBase = $StaffOU
   }
   $results = Get-ADUser @params | Where-Object {
@@ -254,9 +254,11 @@ function Remove-GSuiteAccount {
     if (-not$_.homePage) {
       Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -F Red
     }
+    Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, "& $gam print users query `"email:$($_.homepage)`"")
+    # ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
     ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
     if (-not$gamUser) {
-      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -F Yellow
+      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -F Magenta
       $_
       return
     }
@@ -637,7 +639,7 @@ if ($DisableExpiredAccounts) {
 }
 if ($RemoveExpiredAccounts) {
   Show-BlockInfo 'Remove Expired Accounts after 18 months'
-  Remove-OldAccounts $expiringADAccounts
+  Remove-Oldhccopnts $expiringADAccounts
 }
 
 Clear-SessionData
