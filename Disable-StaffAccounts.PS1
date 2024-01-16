@@ -256,7 +256,7 @@ function Remove-GSuiteAccount {
     }
     Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, "& $gam print users query `"email:$($_.homepage)`"")
     # ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
-    ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
+    ($gamUser = & $gam print users query "email: $($_.homepage)" | ConvertFrom-Csv) *>$null
     if (-not$gamUser) {
       Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -F Magenta
       $_
@@ -639,7 +639,7 @@ if ($DisableExpiredAccounts) {
 }
 if ($RemoveExpiredAccounts) {
   Show-BlockInfo 'Remove Expired Accounts after 18 months'
-  Remove-Oldhccopnts $expiringADAccounts
+  Remove-OldAccounts $expiringADAccounts
 }
 
 Clear-SessionData
