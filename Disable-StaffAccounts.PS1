@@ -24,9 +24,6 @@ param (
   [System.Management.Automation.PSCredential]$ActiveDirectoryCredential,
   [Parameter(Mandatory = $True)]
   [string]$StaffOU = 'OU=Employees,OU=Users,OU=Domain_Root,DC=chico,DC=usd',
-  # [Parameter(Mandatory = $True)]
-  # [Alias('MSCred')]
-  # [System.Management.Automation.PSCredential]$MSOLCredentials,
   [Parameter(Mandatory = $True)]
   [Alias('License')]
   [string]$DefaultLicenseSkuID,
@@ -55,6 +52,7 @@ param (
   [string[]]$BccAddress,
   [Parameter(Mandatory = $True)]
   [string[]]$AccountManagerEmail,
+  [SWITCH]$RunAll,
   [SWITCH]$SetAccountExpirations,
   [SWITCH]$SendAccountExpirationEmails,
   [SWITCH]$DisableExpiredAccounts,
@@ -92,7 +90,7 @@ function Disable-GSuiteForwarding {
     $gam = '.\bin\gam.exe'
   }
   process {
-    TODO Broken scope access denied nightmare
+    TODO scope - access denied issue - gamadv might work instead
     Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.employeeId , $_.homepage ) -F DarkYellow
     Write-Host ("& $gam user {0} forward off" -f $_.homepage) -F Yello
     if (-not$WhatIf) { & $gam user $_.homepage forward off }
@@ -251,23 +249,13 @@ function Remove-GSuiteAccount {
     $gam = '.\bin\gam.exe'
   }
   process {
-    if (-not$_.homePage) {
-      Write-Host ('{0},$_.homepage data missing' -f $MyInvocation.MyCommand.name) -F Red
-    }
-    Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, "& $gam print users query `"email:$($_.homepage)`"")
-    # ($gamUser = & $gam print users query "email:$($_.homepage)" | ConvertFrom-Csv) *>$null
-    ($gamUser = & $gam print users query "email: $($_.homepage)" | ConvertFrom-Csv) *>$null
-    if (-not$gamUser) {
-      Write-Host ("{0},{1},User Not Found" -f $MyInvocation.MyCommand.Name, $_.homepage) -F Magenta
-      $_
-      return
-    }
-    Write-Host ("{0},{1},& $gam delete user {2}" -f $MyInvocation.MyCommand.Name, $_.employeeId, $_.homepage) -F Yellow
-    if (-not$WhatIf) {
-     ($result = & $gam delete user $_.homepage)*>$null
-      $msgData = $MyInvocation.MyCommand.Name, $_.employeeId, ( $result | Out-String )
-      Write-Host ('{0},{1},{2}' -f $msgData ) -F Red
-    }
+    $msg = $MyInvocation.MyCommand.Name, $_.employeeId, $_.homepage
+    $gmail = $_.homepage
+    Write-Host ('{0},{1}' -f $msg[0], "& $gam print users query email:$gmail")
+    ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
+    if (-not$gamUser) { return (Write-Host ("{0},{1},{2},User Not Found" -f $msg)), $_ }
+    Write-Host ("{0},{1}" -f $msg[0], "& $gam delete user $($_.homepage)") -F Blue
+    if (-not$WhatIf) { (& $gam delete user $_.homepage) *>$null }
     $_
   }
 }
@@ -625,19 +613,19 @@ New-ADSession -dc $dc -cmdlets $adCmdLets -cred $ActiveDirectoryCredential
 $global:escapeRetired = Get-EscapeRetired
 $expiringADAccounts = Get-AccountsWithExpirationDate
 
-if ($SetAccountExpirations) {
+if ($SetAccountExpirations -or $RunAll) {
   Show-BlockInfo 'Set Account Expirations'
   Set-AccountExpirations
 }
-if ($SendAccountExpirationEmails) {
+if ($SendAccountExpirationEmails -or $RunAll) {
   Show-BlockInfo 'Send Account Expiration Emails'
   Send-ExpirationEmails $expiringADAccounts
 }
-if ($DisableExpiredAccounts) {
+if ($DisableExpiredAccounts -or $RunAll) {
   Show-BlockInfo 'Disable Expired Accounts'
   Disable-Expired $expiringADAccounts
 }
-if ($RemoveExpiredAccounts) {
+if ($RemoveExpiredAccounts -or $RunAll) {
   Show-BlockInfo 'Remove Expired Accounts after 18 months'
   Remove-OldAccounts $expiringADAccounts
 }
