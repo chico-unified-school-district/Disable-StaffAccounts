@@ -93,7 +93,7 @@ function Disable-GSuiteForwarding {
     TODO scope - access denied issue - gamadv might work instead
     Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.employeeId , $_.homepage ) -F DarkYellow
     Write-Host ("& $gam user {0} forward off" -f $_.homepage) -F Yello
-    if (-not$WhatIf) { & $gam user $_.homepage forward off }
+    if (!$WhatIf) { & $gam user $_.homepage forward off }
     $_
   }
 }
@@ -104,7 +104,7 @@ function Find-MissingExpireDate {
     $filter = "employeeId -eq `'{0}`'" -f $_.empId
     Get-ADUser -Filter $filter -Properties * | Where-Object {
       ($_.AccountExpirationDate -isnot [datetime] -and $_.accountExpires -isnot [datetime]) -and
-      $_.info -notmatch 'keep active' -and
+      $_.info !match 'keep active' -and
       $_.Enabled -eq $True
     }
   }
@@ -178,8 +178,8 @@ function Get-AccountsWithExpirationDate {
     SearchBase = $StaffOU
   }
   $results = Get-ADUser @params | Where-Object {
-   (($_.info -notmatch 'keep') -and
-   ($_.info -notmatch 'active') -and
+   (($_.info !match 'keep') -and
+   ($_.info !match 'active') -and
    ($_.employeeID -match "\d{4,}"))
   } | Sort-Object Surname
 
@@ -228,14 +228,14 @@ function Remove-EscapeEmailWork {
     $baseSql = 'UPDATE HREmployment SET EmailWork = NULL WHERE EmpID = {0}'
   }
   process {
-    if (-not$_.employeeID) {
+    if (!$_.employeeID) {
       Write-Error '{0},{1},Missing critical data' -f $MyInvocation.MyCommand.Name
       return
     }
     $sql = $baseSql -f $_.employeeID
     if ($sql -match $id) {
       Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail, $sql) -F Yellow
-      if (-not$WhatIf) { Invoke-Sqlcmd @EscapeParams -Query $sql }
+      if (!$WhatIf) { Invoke-Sqlcmd @EscapeParams -Query $sql }
     }
     else {
       Write-Error '{0},{1},Missing critical data' -f $MyInvocation.MyCommand.Name
@@ -253,9 +253,9 @@ function Remove-GSuiteAccount {
     $gmail = $_.homepage
     Write-Host ('{0},{1}' -f $msg[0], "& $gam print users query email:$gmail")
     ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
-    if (-not$gamUser) { return (Write-Host ("{0},{1},{2},User Not Found" -f $msg)), $_ }
+    if (!$gamUser) { return (Write-Host ("{0},{1},{2},User Not Found" -f $msg)), $_ }
     Write-Host ("{0},{1}" -f $msg[0], "& $gam delete user $($_.homepage)") -F Blue
-    if (-not$WhatIf) { (& $gam delete user $_.homepage) *>$null }
+    if (!$WhatIf) { (& $gam delete user $_.homepage) *>$null }
     $_
   }
 }
@@ -282,7 +282,7 @@ function Remove-StaffADObject {
       Remove-ADObject @removeParams -Recursive
     }
     $obj = Get-ADUser @objParams
-    if ($obj -and -not$WhatIf) {
+    if ($obj -and !$WhatIf) {
       Write-Host ('{0},{1},{2},Remove-ADUser and Remove-ADObject Failed' -f $msgData) -F Red
       return
     }
@@ -302,7 +302,7 @@ function Remove-UGNReference {
   process {
     $removeFromUGN = "DELETE FROM UGN WHERE SID = {0}" -f $_.employeeId
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $removeFromUGN) -F Yellow
-    if (-not($WhatIf)) { Invoke-SQLCmd @SISParams -Query $removeFromUGN }
+    if (!($WhatIf)) { Invoke-SQLCmd @SISParams -Query $removeFromUGN }
     $_
   }
 }
@@ -414,7 +414,7 @@ function Send-AlertEmail {
     }
     if ($BccAddress) { $mailParams += @{Bcc = $BccAddress } }
 
-    if (-not$WhatIf) { Send-MailMessage @mailParams }
+    if (!$WhatIf) { Send-MailMessage @mailParams }
     $msgData = $MyInvocation.MyCommand.name, ($_.to -join ','), $_.subject
     Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $msgData) -F Green
   }
@@ -441,7 +441,7 @@ function Set-AeriesSTFStatus {
   process {
     $updateSTF = "UPDATE STF SET tg = `'i`' WHERE id = {0}" -f $_.employeeId
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.mail, $updateSTF)
-    if (-not($WhatIf)) { Invoke-SQLCmd @SISParams -Query $updateSTF }
+    if (!($WhatIf)) { Invoke-SQLCmd @SISParams -Query $updateSTF }
     $_
   }
 }
@@ -470,7 +470,7 @@ function Suspend-GSuiteAccount {
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.homepage) -F DarkYellow
     Write-Host ("{0},& $gam update user {0} suspended on" -f $MyInvocation.MyCommand.name, $_.homepage) -F Yellow
-    if (-not$WhatIf) {
+    if (!$WhatIf) {
    ($result = & $gam update user $_.homepage suspended on)*>null
       Write-Host $result -F DarkCyan
     }
