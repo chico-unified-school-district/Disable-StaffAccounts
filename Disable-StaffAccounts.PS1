@@ -90,7 +90,7 @@ function Disable-GSuiteForwarding {
     $gam = '.\bin\gam.exe'
   }
   process {
-    TODO scope - access denied issue - gamadv might work instead
+    # TODO scope - access denied issue - gamadv might work instead
     Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.employeeId , $_.homepage ) -F DarkYellow
     Write-Host ("& $gam user {0} forward off" -f $_.homepage) -F Yello
     if (!$WhatIf) { & $gam user $_.homepage forward off }
@@ -104,7 +104,7 @@ function Find-MissingExpireDate {
     $filter = "employeeId -eq `'{0}`'" -f $_.empId
     Get-ADUser -Filter $filter -Properties * | Where-Object {
       ($_.AccountExpirationDate -isnot [datetime] -and $_.accountExpires -isnot [datetime]) -and
-      $_.info !match 'keep active' -and
+      $_.info -notmatch 'keep active' -and
       $_.Enabled -eq $True
     }
   }
@@ -178,8 +178,8 @@ function Get-AccountsWithExpirationDate {
     SearchBase = $StaffOU
   }
   $results = Get-ADUser @params | Where-Object {
-   (($_.info !match 'keep') -and
-   ($_.info !match 'active') -and
+   (($_.info -notmatch 'keep') -and
+   ($_.info -notmatch 'active') -and
    ($_.employeeID -match "\d{4,}"))
   } | Sort-Object Surname
 
