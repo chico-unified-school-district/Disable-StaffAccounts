@@ -130,48 +130,26 @@ function Format-EmailExpiring {
   }
 }
 
-function Format-EmailDisabled {
+function Format-Email ($type) {
   begin {
-    $baseMsg = Get-Content -Path '.\lib\EmailDisabled.html' -Raw
-    $endDate = (Get-Date -f 'dddd, MMMM dd, yyyy')
+    $thisDate = (Get-Date -f 'dddd, MMMM dd, yyyy')
+    $tableData = @()
     $emailParams = @{
       to      = $AccountManagerEmail
-      subject = 'CUSD Accounts Expired {0}' -f $endDate
-      body    = $null
+      subject = 'CUSD Accounts {0} - {1}' -f $type, $thisDate
     }
-    $rowBase = '<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>'
-    $tableData = $null
   }
-  process {
-    if ($null -eq $_) { return }
-    $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
-    Write-Host ('{0},{1},{2}' -f $msgData ) -F DarkBlue
-    $tableData += $rowBase -f $_.name, $_.mail, $_.homepage
-  }
+  process { $tableData += $_ }
   end {
     if ($tableData.count -lt 1) { break }
-    $newBody = $baseMsg -Replace 'DISABLEDATE', $endDate
-    $newBody = $newBody -Replace 'TABLEDATA', $tableData
-    $emailParams.body = $newBody
-    # Write-Verbose ($emailParams.Body | Out-String )
+    $css = Get-Content -Path '.\html\style.css' -Raw
+    $message = 'Hello,<br>The following employee accounts have been {0}:<br>' -F $type
+    $sig = Get-Content -Path '.\html\emailSig.html' -Raw
+    $html = $tableData | ConvertTo-Html -Property EmployeeId , Name, Mail -Head $css -PreContent $message -PostContent $sig
+    $html = $html -replace '<table>', '<table class="infoTable">'
+    $emailParams.body = $html
+    Write-Verbose ($emailParams.Body | Out-String )
     Write-Verbose ($emailParams | Out-String )
-    $emailParams
-  }
-}
-
-function Format-EmailRemoved {
-  begin { $baseMsg = Get-Content -Path '.\lib\EmailRemoved.txt' -Raw }
-  process {
-    $html = $baseMsg -f $_.name, $_.mail, $_.homepage, (Get-Date -f 'dddd, MMMM dd yyyy')
-    $emailParams = @{
-      to      = $AccountManagerEmail
-      subject = 'CUSD Account Removed - {0}' -f $_.mail
-      body    = $html
-    }
-    $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
-    Write-Host ('{0},{1},{2}' -f $msgData ) -F DarkBlue
-    Write-Verbose ($emailParams | Out-String )
-    # Write-Verbose ($emailParams.body | Out-String )
     $emailParams
   }
 }
@@ -537,7 +515,7 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
-  # New-ExchangeOnlineSession
+  New-ExchangeOnlineSession
   Connect-AzureAD -Credential $AzureADCredentials
   $expiredAccounts = $adData | Select-CurrentlyExpired
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
@@ -554,11 +532,11 @@ function Disable-Expired ($adData) {
   Remove-FromO365Groups |
   Remove-O365Forwarding |
   Suspend-GSuiteAccount |
-  Format-EmailDisabled |
-  Send-AlertEmail |
+  Format-Email 'Disabled' |
+  Send-AlertEmail
   Show-Processed
 
-  # Disconnect-ExchangeOnline -Confirm:$false
+  Disconnect-ExchangeOnline -Confirm:$false
 }
 
 function Disable-PreventAccidentalDelete {
@@ -590,7 +568,7 @@ function Remove-OldAccounts($adData) {
   Remove-EscapeEmailWork |
   Disable-PreventAccidentalDelete |
   Remove-StaffADObject |
-  Format-EmailRemoved |
+  Format-Email Removed |
   Send-AlertEmail |
   Show-Processed
 }
