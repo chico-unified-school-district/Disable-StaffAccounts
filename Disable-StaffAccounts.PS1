@@ -131,19 +131,30 @@ function Format-EmailExpiring {
 }
 
 function Format-EmailDisabled {
-  begin { $baseMsg = Get-Content -Path '.\lib\EmailDisabled.txt' -Raw }
-  process {
+  begin {
+    $baseMsg = Get-Content -Path '.\lib\EmailDisabled.html' -Raw
     $endDate = (Get-Date -f 'dddd, MMMM dd, yyyy')
-    $html = $baseMsg -f $_.name, $_.mail, $_.homepage, $endDate
     $emailParams = @{
       to      = $AccountManagerEmail
-      subject = 'CUSD Account Expired - {0} - {1}' -f $_.mail, $endDate
-      body    = $html
+      subject = 'CUSD Accounts Expired {0}' -f $endDate
+      body    = $null
     }
-    Write-Verbose ($emailParams | Out-String )
-    # Write-Verbose ($emailParams.body | Out-String )
+    $rowBase = '<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>'
+    $tableData = $null
+  }
+  process {
+    if ($null -eq $_) { return }
     $msgData = $MyInvocation.MyCommand.name, $_.employeeId, $_.mail
     Write-Host ('{0},{1},{2}' -f $msgData ) -F DarkBlue
+    $tableData += $rowBase -f $_.name, $_.mail, $_.homepage
+  }
+  end {
+    if ($tableData.count -lt 1) { break }
+    $newBody = $baseMsg -Replace 'DISABLEDATE', $endDate
+    $newBody = $newBody -Replace 'TABLEDATA', $tableData
+    $emailParams.body = $newBody
+    # Write-Verbose ($emailParams.Body | Out-String )
+    Write-Verbose ($emailParams | Out-String )
     $emailParams
   }
 }
@@ -166,8 +177,7 @@ function Format-EmailRemoved {
 }
 
 function Get-AccountsWithExpirationDate {
-  $msgData = $MyInvocation.MyCommand.Name
-  Write-Host ('{0},Get AD Objects with AccountExpirationDate' -f $msgData) -F Green
+  Write-Host ('{0}' -f $MyInvocation.MyCommand.Name) -F Green
   $params = @{
     filter     = {
     (AccountExpirationDate -like "*") -and
@@ -183,7 +193,7 @@ function Get-AccountsWithExpirationDate {
    ($_.employeeID -match "\d{4,}"))
   } | Sort-Object Surname
 
-  Write-Host ( 'AD with expiration date results: {0}' -f $results.count) -F Green
+  Write-Host ( 'AD with expiration date results: {0}' -f @($results).count) -F Green
   $results
 }
 
@@ -196,7 +206,7 @@ function Get-EscapeRetired {
     Query                  = (Get-Content -Path '.\sql\retired-terminated.sql' -Raw)
   }
   $results = Invoke-Sqlcmd @EscapeParams
-  Write-Host ( 'Escape Results Count: {0}' -f $results.count ) -F Green
+  Write-Host ( 'Escape Results Count: {0}' -f @($results).count ) -F Green
   $results
 }
 
@@ -405,7 +415,7 @@ function Send-AlertEmail {
       To         = $_.to
       From       = '<{0}>' -f $EmailCredential.Username
       Subject    = $_.subject
-      bodyAsHTML = $true
+      BodyAsHTML = $true
       Body       = $_.body
       SMTPServer = 'smtp.office365.com'
       Cred       = $EmailCredential
@@ -415,8 +425,9 @@ function Send-AlertEmail {
     if ($BccAddress) { $mailParams += @{Bcc = $BccAddress } }
 
     if (!$WhatIf) { Send-MailMessage @mailParams }
-    $msgData = $MyInvocation.MyCommand.name, ($_.to -join ','), $_.subject
-    Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $msgData) -F Green
+    Write-Host ($mailParams | Out-String) -F Green
+    $logData = $MyInvocation.MyCommand.name, ($_.to -join ','), $_.subject
+    Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $logData) -F Green
   }
 }
 
@@ -526,13 +537,13 @@ function Send-ExpirationEmails ($adData) {
 }
 
 function Disable-Expired ($adData) {
-  New-ExchangeOnlineSession
+  # New-ExchangeOnlineSession
   Connect-AzureAD -Credential $AzureADCredentials
   $expiredAccounts = $adData | Select-CurrentlyExpired
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ($verboseList | Out-String)
-  $i = ($expiredAccounts | Measure-Object).count
-  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i ) -F Green
+  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expiredAccounts).count ) -F Green
+
   $expiredAccounts |
   Disable-ADAccount |
   Set-RandomPassword |
@@ -547,7 +558,7 @@ function Disable-Expired ($adData) {
   Send-AlertEmail |
   Show-Processed
 
-  Disconnect-ExchangeOnline -Confirm:$false
+  # Disconnect-ExchangeOnline -Confirm:$false
 }
 
 function Disable-PreventAccidentalDelete {
