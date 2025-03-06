@@ -27,9 +27,9 @@ param (
   [Parameter(Mandatory = $True)]
   [Alias('License')]
   [string]$DefaultLicenseSkuID,
-  [Parameter(Mandatory = $True)]
-  [Alias('AzureCred')]
-  [System.Management.Automation.PSCredential]$AzureADCredentials,
+  # [Parameter(Mandatory = $True)]
+  # [Alias('AzureCred')]
+  # [System.Management.Automation.PSCredential]$AzureADCredentials,
   [Parameter(Mandatory = $True)]
   [Alias('ExchCred')]
   [System.Management.Automation.PSCredential]$ExchangeOnlineCredentials,
@@ -297,7 +297,6 @@ function Remove-UGNReference {
 }
 
 function Remove-FromO365Groups {
-  # begin { New-ExchangeOnlineSession }
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F Yellow
     $mail = $_.mail
@@ -328,11 +327,9 @@ function Remove-FromO365Groups {
     }
     $_
   }
-  # end { Disconnect-ExchangeOnline -Confirm:$false }
 }
 
 function Remove-O365Forwarding {
-  # begin { New-ExchangeOnlineSession }
   process {
     Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F Yellow
     $mailBoxParams = @{
@@ -357,7 +354,6 @@ function Remove-O365Forwarding {
     }
     $_
   }
-  # end { Disconnect-ExchangeOnline -Confirm:$false }
 }
 
 filter Select-CurrentlyExpired {
@@ -498,7 +494,7 @@ function Set-ExpireDate {
 function Show-Processed {
   begin { $i = 0 }
   process {
-    Write-verbose ( $_ | Out-String )
+    # Write-verbose ( $_.employeeID | Out-String )
     $i++
   }
   end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -F Green }
@@ -517,7 +513,7 @@ function Send-ExpirationEmails ($adData) {
 
 function Disable-Expired ($adData) {
   New-ExchangeOnlineSession
-  Connect-AzureAD -Credential $AzureADCredentials
+  # Connect-AzureAD -Credential $AzureADCredentials
   $expiredAccounts = $adData | Select-CurrentlyExpired
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ($verboseList | Out-String)
@@ -534,7 +530,7 @@ function Disable-Expired ($adData) {
   Remove-O365Forwarding |
   Suspend-GSuiteAccount |
   Format-Email 'Disabled' |
-  Send-AlertEmail
+  Send-AlertEmail |
   Show-Processed
 
   Disconnect-ExchangeOnline -Confirm:$false
@@ -589,7 +585,8 @@ Show-TestRun
 # $ErrorActionPreference = 'Stop'
 Clear-SessionData
 
-'MSOnline', 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
+# 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
+'SQLServer', 'ExchangeOnlineManagement' | Load-Module
 $dc = Select-DomainController $DomainControllers
 $adCmdLets = 'Get-ADUser',
 'Set-ADUser',
