@@ -1,26 +1,22 @@
-<style TYPE="TEXT/CSS">
-<!--
-body { font-family: Helvetica, Arial, Sans-Serif;  }
+body {font-family: Helvetica, Arial, Sans-Serif;}
 .infoTable {
-  border: 1px solid black;
-  border-collapse: collapse;
- th, td {
-  padding: 6px;
-  border: 1px solid black;
- }
- th {
-  text-align: center;
-  color: white;
-  background-color: #348dd8;
- }
-  tr:nth-child(even) {
-  background: #CCC;
-  text-align: left;
- }
- tr:nth-child(odd) {
-  background: #FFF;
-  text-align: left;
- }
+border: 1px solid black;
+border-collapse: collapse;
+th, td {
+padding: 6px;
+border: 1px solid black;
 }
--->
-</style>
+th {
+text-align: center;
+color: white;
+background-color: #348dd8;
+}
+tr:nth-child(even) {
+background: #CCC;
+text-align: left;
+}
+tr:nth-child(odd) {
+background: #FFF;
+text-align: left;
+}
+}

@@ -143,12 +143,13 @@ function Format-Email ($type) {
   end {
     if ($tableData.count -lt 1) { break }
     $css = Get-Content -Path '.\html\style.css' -Raw
+    $head = '<style TYPE="TEXT/CSS">' + $css + '</style>'
     $message = 'Hello,<br>The following employee accounts have been {0}:<br>' -F $type
     $sig = Get-Content -Path '.\html\emailSig.html' -Raw
-    $html = $tableData | ConvertTo-Html -Property EmployeeId , Name, Mail -Head $css -PreContent $message -PostContent $sig
+    $html = $tableData | ConvertTo-Html -Property EmployeeId , Name, Mail -Head $head -PreContent $message -PostContent $sig
     $html = $html -replace '<table>', '<table class="infoTable">'
-    $emailParams.body = $html
-    Write-Verbose ($emailParams.Body | Out-String )
+    $emailParams.body = $html | Out-String
+    Write-Verbose ( $emailParams.Body )
     Write-Verbose ($emailParams | Out-String )
     $emailParams
   }
@@ -394,7 +395,7 @@ function Send-AlertEmail {
       From       = '<{0}>' -f $EmailCredential.Username
       Subject    = $_.subject
       BodyAsHTML = $true
-      Body       = $_.body
+      Body       = $_.body | Out-String
       SMTPServer = 'smtp.office365.com'
       Cred       = $EmailCredential
       UseSSL     = $True
@@ -559,9 +560,9 @@ function Disable-PreventAccidentalDelete {
 function Remove-OldAccounts($adData) {
   $expired18Months = $adData | Select-Expired18Months
   $verboseList = $expired18Months | Select-Object Name, AccountExpirationDate, Enabled | Format-Table
-  $i = ($expired18Months | Measure-Object).count
   Write-Verbose ( $verboseList | Out-String )
-  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i ) -F Green
+  Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expired18Months).count ) -F Green
+
   $expired18Months |
   Remove-UGNReference |
   Remove-GSuiteAccount |
