@@ -113,7 +113,7 @@ function Find-MissingExpireDate {
 function Format-DateToInt { process { [int]$((Get-Date).AddDays($_) | Get-Date -f yyyyMMdd) } }
 
 function Format-EmailExpiring {
-  begin { $baseMsg = Get-Content -Path '.\lib\EmailExpiring.txt' -Raw }
+  begin { $baseMsg = Get-Content -Path .\html\EmailExpiring.html -Raw }
   process {
     $endDate = (Get-Date $_.AccountExpirationDate -f 'dddd, MMMM dd, yyyy')
     $html = $baseMsg -f $_.givenName, $_.mail, $_.homepage, $endDate
@@ -568,20 +568,13 @@ function Remove-OldAccounts($adData) {
   Show-Processed
 }
 
-# . .\lib\Clear-SessionData.ps1
 . .\lib\Create-O365PSSession.ps1
-# . .\lib\Get-RandomPassword.ps1
-# . .\lib\Load-Module.ps1
-# . .\lib\New-ADSession.ps1
-# . .\lib\Select-DomainController.ps1
-. .\lib\Show-BlockInfo.ps1
-# . .\lib\Show-TestRun.ps1
 
 # Main ==========================================================================
 Import-Module -Name 'SQLServer' -CmdLet Invoke-SQLCmd
 $exchCmds = 'Get-EXOMailbox', 'Get-DistributionGroup', 'Get-Mailbox', 'Get-UnifiedGroup', 'Get-User', 'Set-MailBox', 'Get-Recipient', 'Set-UnifiedGroup', 'Set-DistributionGroup'
 Import-Module -Name 'ExchangeOnlineManagement' -CmdLet $exchCmds
-Import-Module -Name 'CommonScriptFunctions' -CmdLet  'New-ADSession', 'New-RandomPassword', 'Clear-SessionData', 'Select-DomainController', 'Show-TestRun'
+Import-Module -Name 'CommonScriptFunctions' -CmdLet  'New-ADSession', 'New-RandomPassword', 'Clear-SessionData', 'Select-DomainController', 'Show-BlockInfo', 'Show-TestRun'
 
 Show-TestRun
 Clear-SessionData

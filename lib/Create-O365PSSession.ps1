@@ -4,7 +4,7 @@ function Create-O365PSSession {
   [System.Management.Automation.PSCredential]$Credential
  )
 
- 'Creating Office365 session'
+ Write-Host 'Creating Office365 session' -F Blue
  $o365SessionParams = @{
   ConfigurationName = 'Microsoft.Exchange'
   ConnectionUri     = 'https://outlook.office365.com/powershell-liveid/'
@@ -13,7 +13,5 @@ function Create-O365PSSession {
   AllowRedirection  = $True
  }
  $O365Session = New-PSSession @o365SessionParams -ErrorAction Stop
- # $o365CmdLets = 'Get-Recipient', 'Get-Mailbox', 'Get-User', 'Set-MailboxRegionalConfiguration', 'Get-MailboxRegionalConfiguration'
- # Import-PSSession -Session $O365Session -CommandName $o365CmdLets -ErrorAction Stop
  Import-PSSession -Session $O365Session -ErrorAction Stop
 }
