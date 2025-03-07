@@ -517,21 +517,16 @@ function Disable-Expired ($adData) {
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ($verboseList | Out-String)
   Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expiredAccounts).count ) -F Green
-  # $expiredAccounts |
-  $users = @()
-  $users += get-aduser GLuciana -Properties *
-  $users += get-aduser CBorja -Properties *
-  $users += get-aduser cs12345 -Properties *
-  $users |
-  # Disable-ADAccount |
-  # Set-RandomPassword |
-  # Set-AddressListVisability |
-  # Set-ExtensionAttribute1 |
-  # Remove-ADGroupMemberships |
-  # Set-AeriesSTFStatus |
-  # Remove-FromO365Groups |
-  # Remove-O365Forwarding |
-  # Suspend-GSuiteAccount |
+  $expiredAccounts |
+  Disable-ADAccount |
+  Set-RandomPassword |
+  Set-AddressListVisability |
+  Set-ExtensionAttribute1 |
+  Remove-ADGroupMemberships |
+  Set-AeriesSTFStatus |
+  Remove-FromO365Groups |
+  Remove-O365Forwarding |
+  Suspend-GSuiteAccount |
   Format-Email 'Disabled' |
   Send-AlertEmail |
   Show-Processed
