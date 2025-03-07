@@ -147,7 +147,7 @@ function Format-Email ($type) {
     $message = 'The following employee accounts have been {0}:<br><br>' -F $type
     $sig = Get-Content -Path '.\html\emailSig.html' -Raw
     $html = $tableData | ConvertTo-Html -Property EmployeeId , Name, Mail -Head $head -PreContent $message -PostContent $sig
-    $emailParams.body = $html
+    $emailParams.body = $html | Out-String
     Write-Verbose ( $emailParams.Body )
     Write-Verbose ($emailParams | Out-String )
     $emailParams
@@ -442,7 +442,7 @@ function Set-ExtensionAttribute1 {
 function Set-RandomPassword {
   process {
     Write-Host('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.employeeId, $_.mail) -F DarkYellow
-    $securePw = ConvertTo-SecureString -String (Get-RandomPassword 20) -AsPlainText -Force
+    $securePw = ConvertTo-SecureString -String (New-RandomPassword 20) -AsPlainText -Force
     Set-ADAccountPassword -Identity $_.ObjectGUID -NewPassword $securePw -Confirm:$false -WhatIf:$WhatIf
     $_
   }
@@ -568,23 +568,24 @@ function Remove-OldAccounts($adData) {
   Show-Processed
 }
 
-. .\lib\Clear-SessionData.ps1
+# . .\lib\Clear-SessionData.ps1
 . .\lib\Create-O365PSSession.ps1
-. .\lib\Get-RandomPassword.ps1
-. .\lib\Load-Module.ps1
-. .\lib\New-ADSession.ps1
-. .\lib\Select-DomainController.ps1
+# . .\lib\Get-RandomPassword.ps1
+# . .\lib\Load-Module.ps1
+# . .\lib\New-ADSession.ps1
+# . .\lib\Select-DomainController.ps1
 . .\lib\Show-BlockInfo.ps1
-. .\lib\Show-TestRun.ps1
+# . .\lib\Show-TestRun.ps1
 
 # Main ==========================================================================
+Import-Module -Name 'SQLServer' -CmdLet Invoke-SQLCmd
+$exchCmds = 'Get-EXOMailbox', 'Get-DistributionGroup', 'Get-Mailbox', 'Get-UnifiedGroup', 'Get-User', 'Set-MailBox', 'Get-Recipient', 'Set-UnifiedGroup', 'Set-DistributionGroup'
+Import-Module -Name 'ExchangeOnlineManagement' -CmdLet $exchCmds
+Import-Module -Name 'CommonScriptFunctions' -CmdLet  'New-ADSession', 'New-RandomPassword', 'Clear-SessionData', 'Select-DomainController', 'Show-TestRun'
+
 Show-TestRun
-# 'Setting ErrorActionPreference'
-# $ErrorActionPreference = 'Stop'
 Clear-SessionData
 
-# 'SQLServer', 'ExchangeOnlineManagement', 'AzureAD' | Load-Module
-'SQLServer', 'ExchangeOnlineManagement' | Load-Module
 $dc = Select-DomainController $DomainControllers
 $adCmdLets = 'Get-ADUser',
 'Set-ADUser',
