@@ -144,11 +144,10 @@ function Format-Email ($type) {
     if ($tableData.count -lt 1) { break }
     $css = Get-Content -Path '.\html\style.css' -Raw
     $head = '<style TYPE="TEXT/CSS">' + $css + '</style>'
-    $message = 'Hello,<br>The following employee accounts have been {0}:<br>' -F $type
+    $message = 'The following employee accounts have been {0}:<br><br>' -F $type
     $sig = Get-Content -Path '.\html\emailSig.html' -Raw
     $html = $tableData | ConvertTo-Html -Property EmployeeId , Name, Mail -Head $head -PreContent $message -PostContent $sig
-    $html = $html -replace '<table>', '<table class="infoTable">'
-    $emailParams.body = $html | Out-String
+    $emailParams.body = $html
     Write-Verbose ( $emailParams.Body )
     Write-Verbose ($emailParams | Out-String )
     $emailParams
@@ -518,17 +517,21 @@ function Disable-Expired ($adData) {
   $verboseList = $expiredAccounts | Select-Object name, AccountExpirationDate, Enabled | Format-Table
   Write-Verbose ($verboseList | Out-String)
   Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expiredAccounts).count ) -F Green
-
-  $expiredAccounts |
-  Disable-ADAccount |
-  Set-RandomPassword |
-  Set-AddressListVisability |
-  Set-ExtensionAttribute1 |
-  Remove-ADGroupMemberships |
-  Set-AeriesSTFStatus |
-  Remove-FromO365Groups |
-  Remove-O365Forwarding |
-  Suspend-GSuiteAccount |
+  # $expiredAccounts |
+  $users = @()
+  $users += get-aduser GLuciana -Properties *
+  $users += get-aduser CBorja -Properties *
+  $users += get-aduser cs12345 -Properties *
+  $users |
+  # Disable-ADAccount |
+  # Set-RandomPassword |
+  # Set-AddressListVisability |
+  # Set-ExtensionAttribute1 |
+  # Remove-ADGroupMemberships |
+  # Set-AeriesSTFStatus |
+  # Remove-FromO365Groups |
+  # Remove-O365Forwarding |
+  # Suspend-GSuiteAccount |
   Format-Email 'Disabled' |
   Send-AlertEmail |
   Show-Processed
