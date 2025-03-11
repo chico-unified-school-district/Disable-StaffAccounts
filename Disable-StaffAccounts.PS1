@@ -524,7 +524,7 @@ Import-Module -Name dbatools, ExchangeOnlineManagement, CommonScriptFunctions
 
 # Main ==========================================================================
 
-Show-TestRun
+if (!$WhatIf) { Show-TestRun }
 Clear-SessionData
 
 $dc = Select-DomainController $DomainControllers
@@ -562,4 +562,4 @@ Show-BlockInfo 'Removing Expired Accounts after 18 months'
 Remove-OldAccounts $expiringADAccounts $empDBParams $SISParams
 
 Clear-SessionData
-Show-TestRun
+if (!$WhatIf) { Show-TestRun }
