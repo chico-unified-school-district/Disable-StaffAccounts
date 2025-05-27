@@ -528,13 +528,8 @@ if ($WhatIf) { Show-TestRun }
 Clear-SessionData
 
 $dc = Select-DomainController $DomainControllers
-$adCmdLets = 'Get-ADUser',
-'Set-ADUser',
-'Remove-ADObject',
-'Remove-ADUser',
-'Remove-ADGroupMember',
-'Set-ADAccountPassword',
-'Set-ADObject'
+$adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Remove-ADObject', 'Remove-ADUser', 'Remove-ADGroupMember',
+'Set-ADAccountPassword', 'Set-ADObject'
 New-ADSession -dc $dc -cmdlets $adCmdLets -cred $ActiveDirectoryCredential
 
 $empDBParams = @{
