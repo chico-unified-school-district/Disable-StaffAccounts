@@ -255,7 +255,7 @@ function Remove-UGNReference ($sqlParams) {
   process {
     $sqlVars = ('id={0}' -f $_.EmployeeID)
     Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.mail, $query, $sqlVars) -F Yellow
-    if (!($WhatIf)) { New-SqlOperation @sqlParams -Query $removeFromUGN -Parameters $sqlVars }
+    if (!($WhatIf)) { New-SqlOperation @sqlParams -Query $query -Parameters $sqlVars }
     $_
   }
 }
@@ -467,18 +467,18 @@ function Disable-Expired ($adData, $SISParams) {
   Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expiredAccounts).count ) -F Green
 
   $expiredAccounts |
-  # $users = @(); $users += ad Testrock -All; $users += ad Testerman -All ; $users |
-  Disable-ADAccount |
-  Set-RandomPassword |
-  Set-AddressListVisibility |
-  Set-ExtensionAttribute1 |
-  Remove-ADGroupMemberships |
-  Set-AeriesSTFStatus $SISParams |
-  Remove-FromO365Groups |
-  Remove-O365Forwarding |
-  Suspend-GSuiteAccount |
-  Format-Email 'Disabled' |
-  Send-AlertEmail
+    # $users = @(); $users += ad Testrock -All; $users += ad Testerman -All ; $users |
+    Disable-ADAccount |
+      Set-RandomPassword |
+        Set-AddressListVisibility |
+          Set-ExtensionAttribute1 |
+            Remove-ADGroupMemberships |
+              Set-AeriesSTFStatus $SISParams |
+                Remove-FromO365Groups |
+                  Remove-O365Forwarding |
+                    Suspend-GSuiteAccount |
+                      Format-Email 'Disabled' |
+                        Send-AlertEmail
 
   Disconnect-ExchangeOnline -Confirm:$false
 }
@@ -507,14 +507,14 @@ function Remove-OldAccounts($adData, $empParams, $sisParams) {
   Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($expired18Months).count ) -F Green
 
   $expired18Months |
-  # $users = @(); $users += ad Testrock -All; $users += ad Testerman -All ; $users |
-  Remove-UGNReference $sisParams |
-  Remove-GSuiteAccount |
-  Remove-EscapeEmailWork $empParams |
-  Disable-PreventAccidentalDelete |
-  Remove-StaffADObject |
-  Format-Email Removed |
-  Send-AlertEmail
+    # $users = @(); $users += ad Testrock -All; $users += ad Testerman -All ; $users |
+    Remove-UGNReference $sisParams |
+      Remove-GSuiteAccount |
+        Remove-EscapeEmailWork $empParams |
+          Disable-PreventAccidentalDelete |
+            Remove-StaffADObject |
+              Format-Email Removed |
+                Send-AlertEmail
 }
 
 Import-Module -Name dbatools, ExchangeOnlineManagement, CommonScriptFunctions
