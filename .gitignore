@@ -15,3 +15,4 @@ ehthumbs.db
 *.Desktop.ini
 /bin/oauth2.txt
 /bin/roots.pem
+/Enable-ADObjectInheritance .ps1
