@@ -3,6 +3,7 @@ SELECT
  NameLast,
  NameMiddle,
  EmailWork,
+ EmailHome,
  EmpID,
  BargUnitID,
  DateTerminationLastDay,
@@ -16,7 +17,7 @@ WHERE
  -- R: Retired T: Terminated
  EmploymentStatusCode IN ('R','T')
  AND
- EmailWork LIKE '%@chicousd.org'
+ EmailWork LIKE '%@%'
  AND
  -- Has to have some kind of last day listed
  ( (DateTerminationLastDay IS NOT NULL) OR (DateTermination IS NOT NULL) )
