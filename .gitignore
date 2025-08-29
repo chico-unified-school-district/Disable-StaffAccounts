@@ -12,7 +12,9 @@ ehthumbs.db
 
 # Folder config file
 /logs
+/*.csv
 *.Desktop.ini
 /bin/oauth2.txt
 /bin/roots.pem
 /Enable-ADObjectInheritance .ps1
+/Fix-Licenses.ps1
