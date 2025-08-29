@@ -505,7 +505,7 @@ $SISParams = @{
 # =========================================================================================
 # Retire Substitutes Future Section
 # $escapeRetiredSubs = Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw)
-# $escapeRetiredSubs | Select-StaleSub | Show-Object
+# $escapeRetiredSubs | Select-StaleSub $StaleSubMonths | Show-Object
 # =========================================================================================
 
 # =========================================================================================
