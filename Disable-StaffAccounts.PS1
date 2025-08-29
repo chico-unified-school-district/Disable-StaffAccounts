@@ -531,7 +531,7 @@ Disconnect-ExchangeOnline -Confirm:$false
 
 Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects | Select-ExpiredOld -months $DisabledMaxMonths | Remove-UGNReference $sisParams |
- Remove-GSuiteAccount | Remove-EscapeEmailWork $empParams | Disable-PreventAccidentalDelete | Remove-StaffADObject |
+ Remove-GSuiteAccount | Remove-EscapeEmailWork $empDBParams | Disable-PreventAccidentalDelete | Remove-StaffADObject |
   Format-AdminEmail $AccountManagerEmail Removed | Send-ExpireAlert $EmailCredential
 # =========================================================================================
 
