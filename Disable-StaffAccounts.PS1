@@ -81,6 +81,21 @@ function Disable-ADAccount {
  }
 }
 
+function Disable-PreventAccidentalDelete {
+ process {
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail) -F Yellow
+  $prevParams = @{
+   Identity                        = $_.ad.ObjectGUID
+   ProtectedFromAccidentalDeletion = $False
+   Confirm                         = $False
+   ErrorAction                     = 'Stop'
+   WhatIf                          = $WhatIf
+  }
+  Set-ADObject @prevParams
+  $_
+ }
+}
+
 function Disable-GSuiteForwarding {
  begin {
   $gam = '.\bin\gam.exe'
@@ -176,13 +191,13 @@ function Get-ADWithExpirationDate ($days, $ou) {
 
 function Get-ADWithoutExpirationDate {
  process {
-  Write-Verbose ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.emp.EmpID)
   $filter = "EmployeeID -eq '{0}' -and Enabled -eq 'True'" -f $_.emp.EmpID
-  $_.ad = Get-ADUser -Filter $filter -Properties Description, AccountExpirationDate, LastLogonDate | Where-Object {
+  $_.ad = Get-ADUser -Filter $filter -Properties AccountExpirationDate, Description, LastLogonDate, Mail | Where-Object {
    ($_.AccountExpirationDate -isnot [datetime] -and $_.accountExpires -isnot [datetime]) -and
    $_.info -notmatch 'keep active'
   }
   if (!$_.ad) { return }
+  Write-Verbose ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.emp.EmpID)
   $_
  }
 }
@@ -375,10 +390,9 @@ function Select-StaleSub ($months) {
   $staleLogon = (Get-Date).AddMonths(-$months)
  }
  process {
-  if ($_.emp.EmploymentStatusCode -eq 'S' -and $_.ad.LastLogonDate -lt $staleLogon ) {
-   Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail, $_.emp.EmploymentStatusCode, $_.ad.LastLogonDate)
-   $_
-  }
+  if ($_.ad.LastLogonDate -gt $staleLogon ) { return }
+  Write-Verbose ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail, $_.ad.LastLogonDate)
+  $_
  }
 }
 
@@ -388,8 +402,6 @@ function Send-ExpireAlert ($emailSender, $bcc) {
    To         = $_.emailParams.To
    From       = '<{0}>' -f $emailSender.Username
    Subject    = $_.emailParams.Subject
-   # BodyAsHTML = $true
-   # Body       = $_.emailParams.Body | Out-String # Out-String needed to convert html obj
    Html       = $_.emailParams.Body | Out-String # Out-String needed to convert html obj
    SMTPServer = 'smtp.office365.com'
    Cred       = $emailSender
@@ -450,9 +462,7 @@ function Set-ExpireDate ([int]$days) {
 
 function Show-Object {
  process {
-  if ($_.ad) { Write-Verbose ($MyInvocation.MyCommand.name, $_.ad | Out-String) }
-  if ($_.emp) { Write-Verbose ($MyInvocation.MyCommand.name, $_.emp | Out-String) }
-  if ($_.expireDate) { Write-Verbose ($MyInvocation.MyCommand.name, $_.expireDate | Out-String) }
+  if ($_) { Write-Verbose ($MyInvocation.MyCommand.name, $_ | Out-String) }
  }
 }
 
@@ -465,23 +475,21 @@ function Suspend-GSuiteAccount {
  }
 }
 
-function Disable-PreventAccidentalDelete {
+function Update-ADStaleSubExpireDate ([int]$days) {
+ begin { $expireDate = (Get-Date).AddDays(-$days) }
  process {
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail) -F Yellow
-  $prevParams = @{
-   Identity                        = $_.ad.ObjectGUID
-   ProtectedFromAccidentalDeletion = $False
-   Confirm                         = $False
-   ErrorAction                     = 'Stop'
-   WhatIf                          = $WhatIf
-  }
-  Set-ADObject @prevParams
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $expireDate) -F Cyan
+  Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
+  $_.expireDate = $expireDate
   $_
  }
 }
 
 # Main ==========================================================================
-Import-Module Mailozaurr, dbatools, ExchangeOnlineManagement, CommonScriptFunctions
+Import-Module Mailozaurr -Cmdlet Send-EmailMessage
+Import-Module dbatools -Cmdlet Invoke-DbaQuery, Set-DbatoolsConfig, Connect-DbaInstance, Disconnect-DbaInstance
+Import-Module ExchangeOnlineManagement -Cmdlet Connect-ExchangeOnline, Disconnect-ExchangeOnline, Get-EXOMailbox
+Import-Module CommonScriptFunctions
 
 if ($WhatIf) { Show-TestRun }
 Clear-SessionData
@@ -503,16 +511,21 @@ $SISParams = @{
 }
 
 # =========================================================================================
-# Retire Substitutes Future Section
-# $escapeRetiredSubs = Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw)
-# $escapeRetiredSubs | Select-StaleSub $StaleSubMonths | Show-Object
+Show-BlockInfo 'Set Stale Sub Expirations'
+$escapeRetiredSubs = Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw)
+$escapeRetiredSubs | Format-Object |
+ Get-ADWithoutExpirationDate |
+  Select-StaleSub $StaleSubMonths |
+   Update-ADStaleSubExpireDate $GracePeriodDays |
+    Set-ADDescription 'Expiration Date Set' |
+     Show-Object
 # =========================================================================================
 
-# =========================================================================================
 Show-BlockInfo 'Set Account Expirations'
 $escapeRetired = Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-terminated.sql' -Raw)
 $escapeRetired | Format-Object | Get-ADWithoutExpirationDate |
  Set-ExpireDate $GracePeriodDays | Set-ADDescription 'Expiration Date Set' | Show-Object
+
 # =========================================================================================
 $expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU | Format-Object
 
@@ -533,6 +546,7 @@ Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects | Select-ExpiredOld -months $DisabledMaxMonths | Remove-UGNReference $sisParams |
  Remove-GSuiteAccount | Remove-EscapeEmailWork $empDBParams | Disable-PreventAccidentalDelete | Remove-StaffADObject |
   Format-AdminEmail $AccountManagerEmail Removed | Send-ExpireAlert $EmailCredential
+
 # =========================================================================================
 
 Remove-Module tmp*
