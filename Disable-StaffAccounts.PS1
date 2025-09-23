@@ -476,7 +476,7 @@ function Suspend-GSuiteAccount {
 }
 
 function Update-ADStaleSubExpireDate ([int]$days) {
- begin { $expireDate = (Get-Date).AddDays(-$days) }
+ begin { $expireDate = (Get-Date).AddDays($days) }
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $expireDate) -F Cyan
   Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
