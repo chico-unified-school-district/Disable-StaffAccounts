@@ -402,12 +402,13 @@ function Send-ExpireAlert ($emailSender, $bcc) {
    To         = $_.emailParams.To
    From       = '<{0}>' -f $emailSender.Username
    Subject    = $_.emailParams.Subject
-   Html       = $_.emailParams.Body | Out-String # Out-String needed to convert html obj
+   Html       = $_.emailParams.Body
    SMTPServer = 'smtp.office365.com'
    Cred       = $emailSender
    UseSSL     = $True
    Port       = 587
    WhatIf     = $WhatIf
+   Suppress   = $True
   }
   if ($bcc) { $params += @{Bcc = $bcc } }
   if ($_.emp.EmailHome) { $params.To = $params.To, $_.emp.EmailHome }
@@ -456,6 +457,15 @@ function Set-ExpireDate ([int]$days) {
   $msgData = $MyInvocation.MyCommand.name, $_.emp.EmpId, $_.ad.UserPrincipalName, $_.expireDate, $_.ad.LastLogonDate
   Write-Host ('{0},{1},{2},Target Expiration: {3},LastLogon: {4}' -f $msgData) -F Magenta
   Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $_.expireDate -Confirm:$false -WhatIf:$WhatIf
+  $_
+ }
+}
+
+function Set-GSuiteArchiveState {
+ process {
+  Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F DarkYellow
+  if ($WhatIf) { return $_ }
+  (& .\bin\gam.exe update user $_.ad.HomePage archived on)*>null
   $_
  }
 }
@@ -523,29 +533,52 @@ $escapeRetiredSubs | Format-Object |
 
 Show-BlockInfo 'Set Account Expirations'
 $escapeRetired = Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-terminated.sql' -Raw)
-$escapeRetired | Format-Object | Get-ADWithoutExpirationDate |
- Set-ExpireDate $GracePeriodDays | Set-ADDescription 'Expiration Date Set' | Show-Object
+$escapeRetired |
+ Format-Object |
+  Get-ADWithoutExpirationDate |
+   Set-ExpireDate $GracePeriodDays |
+    Set-ADDescription 'Expiration Date Set' |
+     Show-Object
 
 # =========================================================================================
 $expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU | Format-Object
 
 Show-BlockInfo 'Account Expiration Emails'
-$expireADObjects | Select-ExpiringAccounts 14 | Add-EmpData $empDBParams |
- Format-EmailExpiring | Send-ExpireAlert $EmailCredential $BccAddress
+$expireADObjects |
+ Select-ExpiringAccounts 14 |
+  Add-EmpData $empDBParams |
+   Format-EmailExpiring |
+    Send-ExpireAlert $EmailCredential $BccAddress
 
 Show-BlockInfo 'Disabling Expired Accounts'
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
-$expireADObjects | Select-Expired |
- Disable-ADAccount | Set-RandomPassword | Clear-ExtensionAttribute1 |
-  Remove-ADGroupMemberships | Add-DefaultGroups $DefaultGroups | Set-AeriesSTFInactive $SISParams |
-   Remove-FromO365Groups | Remove-O365Forwarding | Suspend-GSuiteAccount |
-    Format-AdminEmail $AccountManagerEmail Disabled | Send-ExpireAlert $EmailCredential
+$expireADObjects |
+ Select-Expired |
+  Disable-ADAccount |
+   Set-RandomPassword |
+    Clear-ExtensionAttribute1 |
+     Remove-ADGroupMemberships |
+      Add-DefaultGroups $DefaultGroups |
+       Set-AeriesSTFInactive $SISParams |
+        Remove-FromO365Groups |
+         Remove-O365Forwarding |
+          Suspend-GSuiteAccount |
+           Set-GSuiteArchiveState |
+            Format-AdminEmail $AccountManagerEmail Disabled |
+             Send-ExpireAlert $EmailCredential
+
 Disconnect-ExchangeOnline -Confirm:$false
 
 Show-BlockInfo 'Remove Old Expired Accounts'
-$expireADObjects | Select-ExpiredOld -months $DisabledMaxMonths | Remove-UGNReference $sisParams |
- Remove-GSuiteAccount | Remove-EscapeEmailWork $empDBParams | Disable-PreventAccidentalDelete | Remove-StaffADObject |
-  Format-AdminEmail $AccountManagerEmail Removed | Send-ExpireAlert $EmailCredential
+$expireADObjects |
+ Select-ExpiredOld -months $DisabledMaxMonths |
+  Remove-UGNReference $sisParams |
+   Remove-GSuiteAccount |
+    Remove-EscapeEmailWork $empDBParams |
+     Disable-PreventAccidentalDelete |
+      Remove-StaffADObject |
+       Format-AdminEmail $AccountManagerEmail Removed
+       | Send-ExpireAlert $EmailCredential
 
 # =========================================================================================
 
