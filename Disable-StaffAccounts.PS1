@@ -577,8 +577,8 @@ $expireADObjects |
     Remove-EscapeEmailWork $empDBParams |
      Disable-PreventAccidentalDelete |
       Remove-StaffADObject |
-       Format-AdminEmail $AccountManagerEmail Removed
-       | Send-ExpireAlert $EmailCredential
+       Format-AdminEmail $AccountManagerEmail Removed |
+              Send-ExpireAlert $EmailCredential
 
 # =========================================================================================
 
