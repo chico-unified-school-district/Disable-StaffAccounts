@@ -97,9 +97,6 @@ function Disable-PreventAccidentalDelete {
 }
 
 function Disable-GSuiteForwarding {
- begin {
-  $gam = '.\bin\gam.exe'
- }
  process {
   # TODO scope - access denied issue - gamadv might work instead
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID , $_.homepage ) -F DarkYellow
@@ -242,9 +239,6 @@ function Remove-EscapeEmailWork ($sqlParams) {
 }
 
 function Remove-GSuiteAccount {
- begin {
-  $gam = '.\bin\gam.exe'
- }
  process {
   $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.homepage
   $gmail = $_.ad.HomePage
@@ -465,7 +459,7 @@ function Set-GSuiteArchiveState {
  process {
   Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F DarkYellow
   if ($WhatIf) { return $_ }
-  (& .\bin\gam.exe update user $_.ad.HomePage archived on)*>null
+  (& $gam update user $_.ad.HomePage archived on)*>null
   $_
  }
 }
@@ -480,7 +474,7 @@ function Suspend-GSuiteAccount {
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F DarkYellow
   if ($WhatIf) { return $_ }
-  (& .\bin\gam.exe update user $_.ad.HomePage suspended on)*>null
+  (& $gam update user $_.ad.HomePage suspended on)*>null
   $_
  }
 }
@@ -500,6 +494,8 @@ Import-Module Mailozaurr -Cmdlet Send-EmailMessage
 Import-Module dbatools -Cmdlet Invoke-DbaQuery, Set-DbatoolsConfig, Connect-DbaInstance, Disconnect-DbaInstance
 Import-Module ExchangeOnlineManagement -Cmdlet Connect-ExchangeOnline, Disconnect-ExchangeOnline, Get-EXOMailbox
 Import-Module CommonScriptFunctions
+
+$gam = 'C:\GAM7\gam.exe'
 
 if ($WhatIf) { Show-TestRun }
 Clear-SessionData
@@ -578,7 +574,7 @@ $expireADObjects |
      Disable-PreventAccidentalDelete |
       Remove-StaffADObject |
        Format-AdminEmail $AccountManagerEmail Removed |
-              Send-ExpireAlert $EmailCredential
+        Send-ExpireAlert $EmailCredential
 
 # =========================================================================================
 
