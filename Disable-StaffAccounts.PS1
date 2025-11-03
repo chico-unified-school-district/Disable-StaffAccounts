@@ -325,6 +325,22 @@ function Remove-FromO365Groups {
  }
 }
 
+function Remove-GSuiteLicense {
+ begin {
+  $license = @(
+   1010310009 # Google Workspace for Education Plus (Staff)
+  )
+ }
+ process {
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail)
+  foreach ($lic in $license) {
+   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.HomePage, $lic) -F DarkYellow
+   if (!$WhatIf) { (& $gam user $_.ad.HomePage del license $lic)*>null }
+  }
+  $_
+ }
+}
+
 function Remove-O365Forwarding {
  process {
   $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.Mail
@@ -560,8 +576,9 @@ $expireADObjects |
          Remove-O365Forwarding |
           Suspend-GSuiteAccount |
            Set-GSuiteArchiveState |
-            Format-AdminEmail $AccountManagerEmail Disabled |
-             Send-ExpireAlert $EmailCredential
+            Remove-GSuiteLicense |
+             Format-AdminEmail $AccountManagerEmail Disabled |
+              Send-ExpireAlert $EmailCredential
 
 Disconnect-ExchangeOnline -Confirm:$false
 
