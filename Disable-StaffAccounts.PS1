@@ -241,13 +241,13 @@ function Remove-EscapeEmailWork ($sqlParams) {
 function Remove-GSuiteAccount {
  process {
   $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.homepage
-  $gmail = $_.ad.HomePage
-  if ($gmail -notmatch '@') { return $_ }
-  Write-Verbose ('{0},{1}' -f $msg[0], "& $gam print users query email:$gmail")
-  ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
-  if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
+  # $gmail = $_.ad.HomePage
+  # if ($gmail -notmatch '@') { return $_ }
+  # Write-Verbose ('{0},{1}' -f $msg[0], "& $gam print users query email:$gmail")
+  # ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
+  # if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
   Write-Host ('{0},{1}' -f $msg[0], "& $gam delete user $($_.homepage)") -F Blue
-  if (!$WhatIf) { (& $gam delete user $gmail) *>$null }
+  if (!$WhatIf) { (& $gam delete user $_.ad.HomePage) *>$null }
   $_
  }
 }
