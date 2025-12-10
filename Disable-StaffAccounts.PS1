@@ -461,12 +461,20 @@ function Set-RandomPassword {
 }
 
 function Set-ExpireDate ([int]$days) {
+ begin {
+  # Remove-Item -Path '.\Set-ExpireDate.csv' -ErrorAction SilentlyContinue
+  # "EmpId,Name,Email,Target Expiration,LastLogon" | Out-File -FilePath '.\Set-ExpireDate.csv'
+ }
  process {
-  $lastDay = if ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay } else { $_.emp.DateTermination }
+  $lastDay = if ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay }
+  elseif ($_.emp.DateTermination -match '\d') { $_.emp.DateTermination }
+  else { (Get-Date).AddDays(14) } # Default to 2 weeks if no last day found
   $_.expireDate = (Get-Date $lastDay).AddDays($days)
   $msgData = $MyInvocation.MyCommand.name, $_.emp.EmpId, $_.ad.UserPrincipalName, $_.expireDate, $_.ad.LastLogonDate
   Write-Host ('{0},{1},{2},Target Expiration: {3},LastLogon: {4}' -f $msgData) -F Magenta
   Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $_.expireDate -Confirm:$false -WhatIf:$WhatIf
+  # '{0},{1},{2},{3},{4}' -f $_.emp.EmpId, $_.ad.Name, $_.ad.Mail, $_.expireDate, $_.ad.LastLogonDate |
+  #  Out-File -FilePath '.\Set-ExpireDate.csv' -Append
   $_
  }
 }

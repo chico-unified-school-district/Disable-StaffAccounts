@@ -18,3 +18,4 @@ ehthumbs.db
 /bin/roots.pem
 /Enable-ADObjectInheritance .ps1
 /Fix-Licenses.ps1
+/Set-ExpireDate.csv
