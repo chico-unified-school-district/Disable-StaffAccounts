@@ -281,11 +281,13 @@ function Remove-GSuiteLicense {
   )
  }
  process {
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.HomePage) -F Blue
+  $ErrorActionPreference = 'SilentlyContinue'
   foreach ($lic in $license) {
-   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.HomePage, $lic) -F DarkYellow
+   $msgData = $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage, $lic
+   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkYellow
    if (!$WhatIf) { (& $gam user $_.ad.HomePage del license $lic)*>null }
   }
+  $ErrorActionPreference = 'Stop'
   $_
  }
 }
