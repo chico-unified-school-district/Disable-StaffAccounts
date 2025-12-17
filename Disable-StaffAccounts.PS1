@@ -508,7 +508,6 @@ function Set-GSuiteArchiveState {
   Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F DarkYellow
   if ($WhatIf) { return $_ }
   (& $gam update user $_.ad.HomePage archived on)*>null
-  if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
   $_
  }
 }
