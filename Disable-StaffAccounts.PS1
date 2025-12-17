@@ -120,10 +120,9 @@ function Disable-PreventAccidentalDelete {
 
 function Disable-GSuiteForwarding {
  process {
-  # TODO scope - access denied issue - gamadv might work instead
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID , $_.homepage ) -F DarkYellow
-  Write-Host ("& $gam user {0} forward off" -f $_.homepage) -F Yello
-  if (!$WhatIf) { & $gam user $_.homepage forward off }
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID , $_.ad.homepage ) -F Blue
+  Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
+  if (!$WhatIf) { (& $gam user $_.ad.homepage forward off)*>null }
   $_
  }
 }
@@ -240,7 +239,7 @@ function Remove-ADGroupMemberships {
    Remove-ADGroupMember -Identity $group -Members $_.ad.ObjectGUID -Confirm:$false -WhatIf:$WhatIf
   }
   $msg = $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, ($groups -join ';')
-  Write-Host ('{0},{1},{2},[{3}]' -f $msg) -F DarkYellow
+  Write-Host ('{0},{1},{2},[{3}]' -f $msg) -F Blue
   $_
  }
 }
@@ -271,6 +270,22 @@ function Remove-GSuiteAccount {
   # if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
   Write-Host ('{0},{1}' -f $msg[0], "& $gam delete user $($_.homepage)") -F Blue
   if (!$WhatIf) { (& $gam delete user $_.ad.HomePage) *>$null }
+  $_
+ }
+}
+
+function Remove-GSuiteLicense {
+ begin {
+  $license = @(
+   1010310009 # Google Workspace for Education Plus (Staff)
+  )
+ }
+ process {
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.HomePage) -F Blue
+  foreach ($lic in $license) {
+   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.HomePage, $lic) -F DarkYellow
+   if (!$WhatIf) { (& $gam user $_.ad.HomePage del license $lic)*>null }
+  }
   $_
  }
 }
@@ -348,22 +363,6 @@ function Remove-FromO365Groups {
  }
 }
 
-function Remove-GSuiteLicense {
- begin {
-  $license = @(
-   1010310009 # Google Workspace for Education Plus (Staff)
-  )
- }
- process {
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail)
-  foreach ($lic in $license) {
-   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.HomePage, $lic) -F DarkYellow
-   if (!$WhatIf) { (& $gam user $_.ad.HomePage del license $lic)*>null }
-  }
-  $_
- }
-}
-
 function Remove-O365Forwarding {
  process {
   $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.Mail
@@ -376,7 +375,7 @@ function Remove-O365Forwarding {
    WhatIf                     = $WhatIf
   }
   $msgData = $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, ($mailbox.ForwardingAddress, $mailbox.ForwardingSmtpAddress -join ',')
-  Write-Host ('{0},{1},{2},Removing Mailbox Forwarding [{3}]' -f $msgData ) -F Yellow
+  Write-Host ('{0},{1},{2},Removing Mailbox Forwarding [{3}]' -f $msgData ) -F Blue
   $mailbox | Set-MailBox @mailBoxParams
   $_
  }
@@ -519,7 +518,7 @@ function Show-Object {
 
 function Suspend-GSuiteAccount {
  process {
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F DarkYellow
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.HomePage) -F Blue
   if ($WhatIf) { return $_ }
   (& $gam update user $_.ad.HomePage suspended on)*>null
   $_
@@ -586,12 +585,12 @@ $escapeRetired |
 # =========================================================================================
 $expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU | Format-Object
 
-# Show-BlockInfo 'Account Expiration Emails'
-# $expireADObjects |
-#  Select-ExpiringAccounts 14 |
-#   Add-EmpData $empDBParams |
-#    Format-EmailExpiring |
-#     Send-ExpireAlert $EmailCredential $BccAddress
+Show-BlockInfo 'Account Expiration Emails'
+$expireADObjects |
+ Select-ExpiringAccounts 14 |
+  Add-EmpData $empDBParams |
+   Format-EmailExpiring |
+    Send-ExpireAlert $EmailCredential $BccAddress
 
 Show-BlockInfo 'Disabling Expired Accounts'
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
