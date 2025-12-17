@@ -72,6 +72,20 @@ function Clear-ExtensionAttribute1 {
  }
 }
 
+function Convert-ToSharedMailbox {
+ process {
+  Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf
+  $result = Get-Mailbox -Identity $_.ad.Mail | Format-List RecipientTypeDetails, IsShared
+  $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
+  if ($result.IsShared -ne $true) {
+   Write-Error ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
+   if (!$WhatIf) { return }
+  }
+  Write-Host ('{0},{1},{2},Converted to Shared Mailbox' -f $msgData) -F Green
+  $_
+ }
+}
+
 function Disable-ADAccount {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.ad.EmployeeID , $_.ad.Mail, $_.ad.AccountExpirationDate
@@ -574,19 +588,20 @@ Show-BlockInfo 'Disabling Expired Accounts'
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
 $expireADObjects |
  Select-Expired |
-  Disable-ADAccount |
-   Set-RandomPassword |
-    Clear-ExtensionAttribute1 |
-     Remove-ADGroupMemberships |
-      Add-DefaultGroups $DefaultGroups |
-       Set-AeriesSTFInactive $SISParams |
-        Remove-FromO365Groups |
-         Remove-O365Forwarding |
-          Suspend-GSuiteAccount |
-           Set-GSuiteArchiveState |
-            Remove-GSuiteLicense |
-             Format-AdminEmail $AccountManagerEmail Disabled |
-              Send-ExpireAlert $EmailCredential
+  Convert-ToSharedMailbox |
+   Disable-ADAccount |
+    Set-RandomPassword |
+     Clear-ExtensionAttribute1 |
+      Remove-ADGroupMemberships |
+       Disable-GSuiteForwarding |
+        Set-AeriesSTFInactive $SISParams |
+         Remove-FromO365Groups |
+          Remove-O365Forwarding |
+           Suspend-GSuiteAccount |
+            Set-GSuiteArchiveState |
+             Remove-GSuiteLicense |
+              Format-AdminEmail $AccountManagerEmail Disabled |
+               Send-ExpireAlert $EmailCredential
 
 Disconnect-ExchangeOnline -Confirm:$false
 
