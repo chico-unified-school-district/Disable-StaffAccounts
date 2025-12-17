@@ -78,7 +78,7 @@ function Convert-ToSharedMailbox {
   $result = Get-Mailbox -Identity $_.ad.Mail | Format-List RecipientTypeDetails, IsShared
   $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
   if ($result.IsShared -ne $true) {
-   Write-Error ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
+   Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
    if (!$WhatIf) { return }
   }
   Write-Host ('{0},{1},{2},Converted to Shared Mailbox' -f $msgData) -F Green
