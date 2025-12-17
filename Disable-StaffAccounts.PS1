@@ -74,12 +74,20 @@ function Clear-ExtensionAttribute1 {
 
 function Convert-ToSharedMailbox {
  process {
-  Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf
-  $result = Get-Mailbox -Identity $_.ad.Mail | Format-List RecipientTypeDetails, IsShared
   $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
-  if ($result.IsShared -ne $true) {
+  $params = @{
+   Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
+  }
+  if ((Get-Mailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
+  if (!(Get-Mailbox @params)) {
+   Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
+   return $_
+  }
+  Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
+  if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
+  if ((Get-Mailbox @params).IsShared -ne $true) {
    Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
-   if (!$WhatIf) { return }
+   if (!$WhatIf) { return } # Skip further processing
   }
   Write-Host ('{0},{1},{2},Converted to Shared Mailbox' -f $msgData) -F Green
   $_
@@ -227,11 +235,12 @@ function New-ExchangeOnlineSession ($userAccount) {
 
 function Remove-ADGroupMemberships {
  process {
+  $groups = @(($_.ad.memberof)).ForEach({ $_.Split(',')[0].Replace('CN=', '') })
   foreach ($group in $_.ad.memberof) {
-   $msg = $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, $group.Split(',')[0].Replace('CN=', '')
-   Write-Host ('{0},{1},{2},[{3}]' -f $msg) -F DarkYellow
    Remove-ADGroupMember -Identity $group -Members $_.ad.ObjectGUID -Confirm:$false -WhatIf:$WhatIf
   }
+  $msg = $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, ($groups -join ';')
+  Write-Host ('{0},{1},{2},[{3}]' -f $msg) -F DarkYellow
   $_
  }
 }
@@ -577,12 +586,12 @@ $escapeRetired |
 # =========================================================================================
 $expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU | Format-Object
 
-Show-BlockInfo 'Account Expiration Emails'
-$expireADObjects |
- Select-ExpiringAccounts 14 |
-  Add-EmpData $empDBParams |
-   Format-EmailExpiring |
-    Send-ExpireAlert $EmailCredential $BccAddress
+# Show-BlockInfo 'Account Expiration Emails'
+# $expireADObjects |
+#  Select-ExpiringAccounts 14 |
+#   Add-EmpData $empDBParams |
+#    Format-EmailExpiring |
+#     Send-ExpireAlert $EmailCredential $BccAddress
 
 Show-BlockInfo 'Disabling Expired Accounts'
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
