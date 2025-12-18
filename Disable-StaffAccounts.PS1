@@ -210,7 +210,8 @@ function Get-ADWithExpirationDate ($days, $ou) {
 function Get-ADWithoutExpirationDate {
  process {
   $filter = "EmployeeID -eq '{0}' -and Enabled -eq 'True'" -f $_.emp.EmpID
-  $_.ad = Get-ADUser -Filter $filter -Properties AccountExpirationDate, Description, LastLogonDate, Mail | Where-Object {
+  $properties = 'AccountExpirationDate', 'Description', 'LastLogonDate', 'Mail', 'WhenCreated'
+  $_.ad = Get-ADUser -Filter $filter -Properties $properties | Where-Object {
    ($_.AccountExpirationDate -isnot [datetime] -and $_.accountExpires -isnot [datetime]) -and
    $_.info -notmatch 'keep active'
   }
@@ -383,6 +384,29 @@ function Remove-O365Forwarding {
  }
 }
 
+function Remove-SharedMailbox {
+ process {
+  $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
+  $params = @{
+   Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
+  }
+  if ((Get-Mailbox @params).IsShared -ne $true) { return $_ } # Not a shared mailbox
+  if (!(Get-Mailbox @params)) {
+   Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
+   return $_
+  }
+  Remove-Mailbox -Identity $_.ad.UserPrincipalName -Confirm:$false -WhatIf:$WhatIf
+  if ($WhatIf) { return $_ }
+  Start-Sleep -Seconds 10 # Allow time for mailbox deletion to propagate
+  if (Get-Mailbox @params) {
+   Write-Warning ('{0},{1},{2},NOT Deleted.' -f $msgData)
+   return # Skip further processing
+  }
+  Write-Host ('{0},{1},{2},Shared Mailbox Deleted' -f $msgData) -F Green
+  $_
+ }
+}
+
 function Select-Expired {
  begin { $i = 0 }
  process {
@@ -421,11 +445,23 @@ function Select-ExpiringAccounts ([int]$days) {
 
 function Select-StaleSub ($months) {
  begin {
-  $staleLogon = (Get-Date).AddMonths(-$months)
+  $subCutOffDate = (Get-Date).AddMonths(-$months)
  }
  process {
-  if ($_.ad.LastLogonDate -gt $staleLogon ) { return }
-  Write-Verbose ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail, $_.ad.LastLogonDate)
+  $whenCreated = Get-Date $_.ad.whenCreated -f 'MM/dd/yyyy'
+  $lastLogon = if ($_.ad.LastLogonDate) { Get-Date $_.ad.LastLogonDate -f 'MM/dd/yyyy' } else { 'Never' }
+  $msgData = $MyInvocation.MyCommand.Name, $_.ad.Mail, $whenCreated, $lastLogon
+  # No lastLogonDate but created within the last x months
+  if (!($_.ad.LastLogonDate) -and ($_.ad.whenCreated -gt $subCutOffDate)) {
+   Write-Host ('{0},{1},Created:{2},Logon:{4},Sub account too new' -f $msgData) -f Blue
+   return
+  }
+  # Logged in within the last x months
+  if (($_.ad.LastLogonDate) -and ($_.ad.LastLogonDate -gt $subCutOffDate) ) {
+   Write-Host ('{0},{1},Created:{2},Logon:{3},Sub account logged in recently' -f $msgData) -f Magenta
+   return
+  }
+  Write-Host ('{0},{1},Created:{2},Logon:{3},Stale sub account detected' -f $msgData) -f Yellow
   $_
  }
 }
@@ -623,8 +659,9 @@ $expireADObjects |
     Remove-EscapeEmailWork $empDBParams |
      Disable-PreventAccidentalDelete |
       Remove-StaffADObject |
-       Format-AdminEmail $AccountManagerEmail Removed |
-        Send-ExpireAlert $EmailCredential
+       Remove-SharedMailbox |
+        Format-AdminEmail $AccountManagerEmail Removed |
+         Send-ExpireAlert $EmailCredential
 
 # =========================================================================================
 
