@@ -78,14 +78,14 @@ function Convert-ToSharedMailbox {
   $params = @{
    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   }
-  if ((Get-Mailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
-  if (!(Get-Mailbox @params)) {
+  if ((Get-EXOMailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
+  if (!(Get-EXOMailbox @params)) {
    Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
    return $_
   }
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
   if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
-  if ((Get-Mailbox @params).IsShared -ne $true) {
+  if ((Get-EXOMailbox @params).IsShared -ne $true) {
    Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
    if (!$WhatIf) { return } # Skip further processing
   }
@@ -369,7 +369,7 @@ function Remove-FromO365Groups {
 function Remove-O365Forwarding {
  process {
   $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.Mail
-  $mailbox = Get-Mailbox -Filter $filter
+  $mailbox = Get-EXOMailbox -Filter $filter
   if ($mailbox.ForwardingAddress, $mailbox.ForwardingSmtpAddress -notmatch '@') { return $_ }
   $mailBoxParams = @{
    DeliverToMailboxAndForward = $false
@@ -390,15 +390,15 @@ function Remove-SharedMailbox {
   $params = @{
    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   }
-  if ((Get-Mailbox @params).IsShared -ne $true) { return $_ } # Not a shared mailbox
-  if (!(Get-Mailbox @params)) {
+  if ((Get-EXOMailbox @params).IsShared -ne $true) { return $_ } # Not a shared mailbox
+  if (!(Get-EXOMailbox @params)) {
    Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
    return $_
   }
   Remove-Mailbox -Identity $_.ad.UserPrincipalName -Confirm:$false -WhatIf:$WhatIf
   if ($WhatIf) { return $_ }
   Start-Sleep -Seconds 10 # Allow time for mailbox deletion to propagate
-  if (Get-Mailbox @params) {
+  if (Get-ExMailbox @params) {
    Write-Warning ('{0},{1},{2},NOT Deleted.' -f $msgData)
    return # Skip further processing
   }
@@ -453,14 +453,15 @@ function Select-StaleSub ($months) {
   $msgData = $MyInvocation.MyCommand.Name, $_.ad.Mail, $whenCreated, $lastLogon
   # No lastLogonDate but created within the last x months
   if (!($_.ad.LastLogonDate) -and ($_.ad.whenCreated -gt $subCutOffDate)) {
-   Write-Host ('{0},{1},Created:{2},Logon:{4},Sub account too new' -f $msgData) -f Blue
+   Write-Verbose ('{0},{1},Created:{2},Logon:{4},Sub account too new' -f $msgData)
    return
   }
   # Logged in within the last x months
   if (($_.ad.LastLogonDate) -and ($_.ad.LastLogonDate -gt $subCutOffDate) ) {
-   Write-Host ('{0},{1},Created:{2},Logon:{3},Sub account logged in recently' -f $msgData) -f Magenta
+   Write-Verbose ('{0},{1},Created:{2},Logon:{3},Sub account logged in recently' -f $msgData)
    return
   }
+  # If here then stale sub account
   Write-Host ('{0},{1},Created:{2},Logon:{3},Stale sub account detected' -f $msgData) -f Yellow
   $_
  }
@@ -631,7 +632,9 @@ $expireADObjects |
     Send-ExpireAlert $EmailCredential $BccAddress
 
 Show-BlockInfo 'Disabling Expired Accounts'
+
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
+
 $expireADObjects |
  Select-Expired |
   Convert-ToSharedMailbox |
@@ -649,8 +652,6 @@ $expireADObjects |
               Format-AdminEmail $AccountManagerEmail Disabled |
                Send-ExpireAlert $EmailCredential
 
-Disconnect-ExchangeOnline -Confirm:$false
-
 Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects |
  Select-ExpiredOld -months $DisabledMaxMonths |
@@ -663,6 +664,7 @@ $expireADObjects |
         Format-AdminEmail $AccountManagerEmail Removed |
          Send-ExpireAlert $EmailCredential
 
+Disconnect-ExchangeOnline -Confirm:$false
 # =========================================================================================
 
 Remove-Module tmp*
