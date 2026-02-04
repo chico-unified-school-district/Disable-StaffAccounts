@@ -78,14 +78,14 @@ function Convert-ToSharedMailbox {
   $params = @{
    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   }
-  if ((Get-EXOMailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
-  if (!(Get-EXOMailbox @params)) {
+  if ((Get-Mailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
+  if (!(Get-Mailbox @params)) {
    Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
    return $_
   }
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
   if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
-  if ((Get-EXOMailbox @params).IsShared -ne $true) {
+  if ((Get-Mailbox @params).IsShared -ne $true) {
    Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
    if (!$WhatIf) { return } # Skip further processing
   }
@@ -93,6 +93,27 @@ function Convert-ToSharedMailbox {
   $_
  }
 }
+# function Convert-ToSharedMailbox {
+#  process {
+#   $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
+#   $params = @{
+#    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
+#   }
+#   if ((Get-EXOMailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
+#   if (!(Get-EXOMailbox @params)) {
+#    Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
+#    return $_
+#   }
+#   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
+#   if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
+#   if ((Get-EXOMailbox @params).IsShared -ne $true) {
+#    Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
+#    if (!$WhatIf) { return } # Skip further processing
+#   }
+#   Write-Host ('{0},{1},{2},Converted to Shared Mailbox' -f $msgData) -F Green
+#   $_
+#  }
+# }
 
 function Disable-ADAccount {
  process {
