@@ -93,27 +93,6 @@ function Convert-ToSharedMailbox {
   $_
  }
 }
-# function Convert-ToSharedMailbox {
-#  process {
-#   $msgData = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail
-#   $params = @{
-#    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
-#   }
-#   if ((Get-EXOMailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
-#   if (!(Get-EXOMailbox @params)) {
-#    Write-Warning ('{0},{1},{2},Mailbox Not Found.' -f $msgData)
-#    return $_
-#   }
-#   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
-#   if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
-#   if ((Get-EXOMailbox @params).IsShared -ne $true) {
-#    Write-Warning ('{0},{1},{2},NOT Converted to Shared Mailbox.' -f $msgData)
-#    if (!$WhatIf) { return } # Skip further processing
-#   }
-#   Write-Host ('{0},{1},{2},Converted to Shared Mailbox' -f $msgData) -F Green
-#   $_
-#  }
-# }
 
 function Disable-ADAccount {
  process {
@@ -284,12 +263,15 @@ function Remove-EscapeEmailWork ($sqlParams) {
 
 function Remove-GSuiteAccount {
  process {
-  $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.homepage
-  # $gmail = $_.ad.HomePage
+  if ($_.ad.HomePage -notmatch '@') {
+   Write-Host ('{0},{1},{2},No email in HomePage attribute' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.HomePage) -F Red
+   return $_
+  }
+  $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.homepage
+  $gmail = $_.ad.HomePage
   # if ($gmail -notmatch '@') { return $_ }
-  # Write-Verbose ('{0},{1}' -f $msg[0], "& $gam print users query email:$gmail")
-  # ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
-  # if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
+  ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null
+  if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
   Write-Host ('{0},{1}' -f $msg[0], "& $gam delete user $($_.homepage)") -F Blue
   if (!$WhatIf) { (& $gam delete user $_.ad.HomePage) *>$null }
   $_
