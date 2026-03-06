@@ -264,20 +264,31 @@ function Remove-EscapeEmailWork ($sqlParams) {
 function Remove-GSuiteAccount {
  process {
   $gmail = $_.ad.HomePage
-  if ($gmail -notmatch '@') {
-   Write-Host ('{0},{1},{2},No email in HomePage attribute' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $gmail) -F Red
-   return $_
-  }
-  $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $gmail
   if ($gmail -notmatch '@') { return $_ }
-  try { ($gamUser = & $gam print users query "email:$gmail" | ConvertFrom-Csv) *>$null }
-  catch { Write-Error ('{0},{1},{2},Error querying GAM' -f $msg) }
-  if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
-  Write-Host ('{0},{1}' -f $msg[0], "& $gam delete user $gmail") -F Blue
-  if (!$WhatIf) { (& $gam delete user $gmail) *>$null }
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $gmail) -F Blue
+  if (!$WhatIf) {
+   try { (& $gam delete user $gmail) *>$null }
+   catch {
+    Write-Host ('{0},{1},Error Deleting: {2}' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $gmail) -F Red
+   }
+  }
   $_
  }
 }
+
+# function Remove-GSuiteAccount {
+#  process {
+#   $gmail = $_.ad.HomePage
+#   if ($gmail -notmatch '@') { return $_ }
+#   $msg = $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $gmail
+#   try { ($gamUser = & $gam print users query "email:$gmail")*>$null }
+#   catch { Write-Error ('{0},{1},{2},Error querying GAM' -f $msg) }
+#   if (!$gamUser) { return (Write-Host ('{0},{1},{2},User Not Found' -f $msg)), $_ }
+#   Write-Host ('{0},{1}' -f $msg[0], "& $gam delete user $gmail") -F Blue
+#   if (!$WhatIf) { (& $gam delete user $gmail) *>$null }
+#   $_
+#  }
+# }
 
 function Remove-GSuiteLicense {
  begin {
