@@ -85,7 +85,10 @@ function Convert-ToSharedMailbox {
    return $_
   }
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
-  if (!$WhatIf) { Start-Sleep -Seconds 10 } # Allow time for mailbox type change to propagate
+  if (!$WhatIf) {
+   Write-Host ('{0},{1},Waiting for mailbox type change to propagate...' -f $msgData) -F Blue
+   Start-Sleep -Seconds 30
+  }
   if ((Get-Mailbox @params).IsShared -ne $true) {
    Write-Warning ('{0},{1},NOT Converted to Shared Mailbox.' -f $msgData)
    if (!$WhatIf) { return } # Skip further processing
@@ -260,8 +263,8 @@ function Remove-EscapeEmailWork ($sqlParams) {
    return $_
   }
   $sqlVars = ('id={0}' -f $_.ad.EmployeeID)
-  Write-Verbose ('{0},{1},{2},{3},{4}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, $sql, $sqlVars)
-  Write-Verbose ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F Yellow
+  # Write-Verbose ('{0},{1},{2},{3},{4}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, $sql, $sqlVars)
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F Yellow
   if (!$WhatIf) { New-SqlOperation @sqlParams -Query $sql -Parameters $sqlVars }
   $_
  }
@@ -303,7 +306,7 @@ function Remove-GSuiteLicense {
 function Remove-StaffADObject {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
-  Write-Host ('{0},{1},{2},Expired {3}' -f $msgData) -F Yellow
+  Write-Host ('{0},{1}' -f $msgData) -f Yellow
   $removeParams = @{
    Identity    = $_.ad.ObjectGUID
    Confirm     = $False
@@ -429,7 +432,6 @@ function Select-Expired {
 function Select-ExpiredOld ($months) {
  begin { $i = 0 }
  process {
-  # Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.Mail, $_.ad.AccountExpirationDate) -F DarkBlue
   if ($_.ad.AccountExpirationDate -le ((Get-Date).AddMonths(-$months)) -and $_.ad.Enabled -eq $False) { $_ }
  }
  end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
