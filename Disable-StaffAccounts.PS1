@@ -125,8 +125,8 @@ function Disable-PreventAccidentalDelete {
 function Disable-GSuiteForwarding {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info ) -F Blue
-  Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
-  if (!$WhatIf) { (& $gam user $_.ad.homepage forward off)*>null }
+  # Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
+  if (!$WhatIf) { (& $gam user "$($_.ad.homepage)" forward off)*>null }
   $_
  }
 }
@@ -272,13 +272,12 @@ function Remove-EscapeEmailWork ($sqlParams) {
 
 function Remove-GSuiteAccount {
  process {
-  $gmail = $_.ad.HomePage
   if ($gmail -notmatch '@') { return $_ }
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $gmail) -F Blue
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F Blue
   if (!$WhatIf) {
-   try { (& $gam delete user $gmail) *>$null }
+   try { (& $gam delete user "$($_.ad.HomePage)") *>$null }
    catch {
-    Write-Host ('{0},{1},Error Deleting: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $gmail) -F Red
+    Write-Host ('{0},{1},Error Deleting: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F Red
    }
   }
   $_
@@ -296,7 +295,7 @@ function Remove-GSuiteLicense {
   foreach ($lic in $license) {
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkYellow
-   if (!$WhatIf) { (& $gam user $_.ad.HomePage del license $lic)*>null }
+   if (!$WhatIf) { (& $gam user "$($_.ad.HomePage)" del license $lic)*>null }
   }
   $ErrorActionPreference = 'Stop'
   $_
@@ -424,7 +423,7 @@ function Select-Expired {
  begin { $i = 0 }
  process {
   if ($_.ad.AccountExpirationDate -lt [DateTime]::Today -and
-   ($_.ad.Enabled -eq 'true' -or $_.ad.Enable -eq $true) ) { $_ }
+   ($_.ad.Enabled -eq 'true' -or $_.ad.Enable -eq $true) ) { $i++; $_ }
  }
  end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
 }
@@ -432,7 +431,7 @@ function Select-Expired {
 function Select-ExpiredOld ($months) {
  begin { $i = 0 }
  process {
-  if ($_.ad.AccountExpirationDate -le ((Get-Date).AddMonths(-$months)) -and $_.ad.Enabled -eq $False) { $_ }
+  if ($_.ad.AccountExpirationDate -le ((Get-Date).AddMonths(-$months)) -and $_.ad.Enabled -eq $False) { $i++; $_ }
  }
  end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
 }
@@ -599,7 +598,7 @@ function Set-ExpireDate ([int]$days) {
 function Set-GSuiteArchiveState {
  process {
   Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkYellow
-  if (!$WhatIf) { (& $gam update user $_.ad.HomePage archived on)*>null }
+  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" archived on)*>null }
   $_
  }
 }
@@ -613,7 +612,7 @@ function Show-Object {
 function Suspend-GSuiteAccount {
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F Blue
-  if (!$WhatIf) { (& $gam update user $_.ad.HomePage suspended on)*>null }
+  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" suspended on)*>null }
   $_
  }
 }
