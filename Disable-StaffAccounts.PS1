@@ -724,3 +724,6 @@ Disconnect-ExchangeOnline -Confirm:$false
 Remove-Module tmp*
 
 if ($WhatIf) { Show-TestRun }
+
+'Script Errors:'
+$error
