@@ -295,7 +295,12 @@ function Remove-GSuiteLicense {
   foreach ($lic in $license) {
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkYellow
-   if (!$WhatIf) { (& $gam user "$($_.ad.HomePage)" del license $lic)*>null }
+   if (!$WhatIf) {
+    try { (& $gam user "$($_.ad.HomePage)" del license $lic)*>null }
+    catch {
+     Write-Host ('{0},{1},Error Removing License [{2}] : {3}' -f $MyInvocation.MyCommand.Name, $_.info, $lic) -F Red
+    }
+   }
   }
   $ErrorActionPreference = 'Stop'
   $_
@@ -534,10 +539,10 @@ function Set-ExchangeData {
   $list.Add('id,name,mail,accountExpirationDate,lastLogonDate')
  }
  process {
-  $_.exchangeData = Get-Mailbox $_.externalObjID -ErrorAction SilentlyContinue
+  $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
+  $_.exchangeData = Get-Mailbox -Filter $filter -ErrorAction SilentlyContinue
   if (!($_.exchangeData)) {
-   $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
-   $_.exchangeData = Get-Mailbox -Filter $filter -ErrorAction SilentlyContinue
+   $_.exchangeData = Get-Mailbox $_.externalObjID -ErrorAction SilentlyContinue
   }
   if (!($_.exchangeData)) {
    Write-Verbose ('{0},{1},Mailbox Not Found.' -f $MyInvocation.MyCommand.Name, $_.info)
@@ -598,7 +603,10 @@ function Set-ExpireDate ([int]$days) {
 function Set-GSuiteArchiveState {
  process {
   Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkYellow
-  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" archived on)*>null }
+  if (!$WhatIf) {
+   (& $gam update user "$($_.ad.HomePage)" archived on)*>null
+   Start-Sleep -Seconds 30 # Allow time for archive state change to propagate
+  }
   $_
  }
 }
@@ -724,6 +732,3 @@ Disconnect-ExchangeOnline -Confirm:$false
 Remove-Module tmp*
 
 if ($WhatIf) { Show-TestRun }
-
-'Script Errors:'
-$error
