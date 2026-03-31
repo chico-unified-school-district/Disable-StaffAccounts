@@ -185,13 +185,12 @@ function Format-Object {
  process {
   # Write-Verbose ($_.gettype(), $_.ad.SamAccountName | Out-String)
   [PSCustomObject]@{
-   ad            = if ($_.ObjectGUID ) { $_ } else { $null }
-   exchangeData  = $null
-   externalObjID = $null
-   emp           = if ($_.EmpId) { $_ } else { $null }
-   emailParams   = $null
-   expireDate    = $null
-   info          = $null
+   ad           = if ($_.ObjectGUID ) { $_ } else { $null }
+   exchangeData = $null
+   emp          = if ($_.EmpId) { $_ } else { $null }
+   emailParams  = $null
+   expireDate   = $null
+   info         = $null
   }
  }
 }
@@ -528,6 +527,7 @@ function Set-AeriesSTFInactive ($params) {
   $_
  }
 }
+
 function Set-ExchangeData {
  begin {
   New-Item -Path .\log -ItemType Directory -Force | Out-Null
@@ -542,9 +542,6 @@ function Set-ExchangeData {
   $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   $_.exchangeData = Get-Mailbox -Filter $filter -ErrorAction SilentlyContinue
   if (!($_.exchangeData)) {
-   $_.exchangeData = Get-Mailbox $_.externalObjID -ErrorAction SilentlyContinue
-  }
-  if (!($_.exchangeData)) {
    Write-Verbose ('{0},{1},Mailbox Not Found.' -f $MyInvocation.MyCommand.Name, $_.info)
    $list.Add($_.info)
   }
@@ -555,13 +552,6 @@ function Set-ExchangeData {
    $list | Out-File -FilePath $logPath -Encoding utf8 -Force -Confirm:$false
    Write-Host ('{0}, Missing Mailbox log exported to: {1}' -f $MyInvocation.MyCommand.Name, $logPath) -F Green
   }
- }
-}
-
-function Set-ExternalObjectId {
- process {
-  $_.externalObjID = $_.ad.'msDS-ExternalDirectoryObjectId' -replace 'User_', ''
-  $_
  }
 }
 
@@ -684,8 +674,7 @@ New-ExchangeOnlineSession $ExchangeOnlineCredentials
 $expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU |
  Format-Object |
   Set-Info |
-   Set-ExternalObjectId |
-    Set-ExchangeData
+   Set-ExchangeData
 
 Show-BlockInfo 'Account Expiration Emails'
 $expireADObjects |
