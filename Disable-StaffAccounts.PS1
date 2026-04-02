@@ -610,7 +610,10 @@ function Set-GSuiteArchiveState {
 
 function Set-GSuiteData {
  process {
-  ($_.gSuiteData = & $gam print users query "email:$($_.ad.HomePage)" allfields | ConvertFrom-Csv)*>$null
+  try { ($_.gSuiteData = & $gam print users query "email:$($_.ad.HomePage)" allfields | ConvertFrom-Csv)*>$null }
+  catch {
+   Write-Host ('{0},{1},Error Getting GSuite Data' -f $MyInvocation.MyCommand.Name, $_.info) -F Red
+  }
   $_
  }
 }
