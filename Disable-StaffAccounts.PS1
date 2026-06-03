@@ -65,10 +65,13 @@ function Add-EmpData ($dbParams) {
  }
 }
 
-function Clear-ExtensionAttribute1 {
+function Clear-ExtensionAttributes {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
-  Set-ADUser -Identity $_.ad.ObjectGUID -Clear extensionAttribute1 -WhatIf:$WhatIf
+  # 1. Generate the array of all 15 attribute names
+  $AllExtensions = 1..15 | ForEach-Object { "extensionAttribute$_" }
+  # 2. Clear them all at once for the target user
+  Set-ADUser -Identity $_.ad.ObjectGUID -Clear $AllExtensions -WhatIf:$WhatIf
   $_
  }
 }
@@ -725,19 +728,20 @@ $expireADObjects |
     Convert-ToSharedMailbox |
      Disable-ADAccount |
       Set-RandomPassword |
-       Clear-ExtensionAttribute1 |
+       Clear-ExtensionAttributes |
         Remove-ADGroupMemberships |
          Disable-GSuiteForwarding |
           Set-AeriesSTFInactive $SISParams |
-           Remove-FromO365Groups |
-            Remove-O365Forwarding |
-             Suspend-GSuiteAccount |
-              Set-GSuiteArchiveState |
-               Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
-                Remove-GSuiteLicense |
-                 Move-GSuiteAccountToOU |
-                  Format-AdminEmail $AccountManagerEmail Disabled |
-                   Send-ExpireAlert $EmailCredential
+           Set-AeriesSTFInactive $SISParams |
+            Remove-FromO365Group2 |
+             Remove-O365Forwarding |
+              Suspend-GSuiteAccount |
+               Set-GSuiteArchiveState |
+                Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
+                 Remove-GSuiteLicense |
+                  Move-GSuiteAccountToOU |
+                   Format-AdminEmail $AccountManagerEmail Disabled |
+                    Send-ExpireAlert $EmailCredential
 
 Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects |
