@@ -732,16 +732,15 @@ $expireADObjects |
         Remove-ADGroupMemberships |
          Disable-GSuiteForwarding |
           Set-AeriesSTFInactive $SISParams |
-           Set-AeriesSTFInactive $SISParams |
-            Remove-FromO365Group2 |
-             Remove-O365Forwarding |
-              Suspend-GSuiteAccount |
-               Set-GSuiteArchiveState |
-                Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
-                 Remove-GSuiteLicense |
-                  Move-GSuiteAccountToOU |
-                   Format-AdminEmail $AccountManagerEmail Disabled |
-                    Send-ExpireAlert $EmailCredential
+           Remove-FromO365Group2 |
+            Remove-O365Forwarding |
+             Suspend-GSuiteAccount |
+              Set-GSuiteArchiveState |
+               Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
+                Remove-GSuiteLicense |
+                 Move-GSuiteAccountToOU |
+                  Format-AdminEmail $AccountManagerEmail Disabled |
+                   Send-ExpireAlert $EmailCredential
 
 Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects |
