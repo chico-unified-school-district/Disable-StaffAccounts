@@ -733,7 +733,7 @@ $expireADObjects |
         Remove-ADGroupMemberships |
          Disable-GSuiteForwarding |
           Set-AeriesSTFInactive $SISParams |
-           Remove-FromO365Group2 |
+           Remove-FromO365Groups |
             Remove-O365Forwarding |
              Suspend-GSuiteAccount |
               Set-GSuiteArchiveState |
