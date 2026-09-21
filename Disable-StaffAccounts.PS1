@@ -304,6 +304,7 @@ function Remove-GSuiteLicense {
  begin {
   $license = @(
    1010310009 # Google Workspace for Education Plus (Staff)
+   1010310008 # Google Workspace for Education Plus (Staff)
   )
  }
  process {
