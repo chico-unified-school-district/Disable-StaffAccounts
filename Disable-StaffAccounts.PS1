@@ -738,10 +738,10 @@ $expireADObjects |
              Suspend-GSuiteAccount |
               Set-GSuiteArchiveState |
                Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
-                Remove-GSuiteLicense |
-                 Move-GSuiteAccountToOU |
-                  Format-AdminEmail $AccountManagerEmail Disabled |
-                   Send-ExpireAlert $EmailCredential
+                # Remove-GSuiteLicense |
+                Move-GSuiteAccountToOU |
+                 Format-AdminEmail $AccountManagerEmail Disabled |
+                  Send-ExpireAlert $EmailCredential
 
 Show-BlockInfo 'Remove Old Expired Accounts'
 $expireADObjects |
