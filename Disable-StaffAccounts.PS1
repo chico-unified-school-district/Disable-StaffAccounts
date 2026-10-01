@@ -35,6 +35,7 @@ param (
  [Parameter(Mandatory = $True)][string]$SISServer,
  # [Parameter(Mandatory = $True)][string]$StaffOU,
  [Parameter(Mandatory = $True)][int]$StaleSubMonths,
+ [Alias('sea')][switch]$SendExpirationAlerts,
  [Alias('wi')][SWITCH]$WhatIf
 )
 
@@ -134,7 +135,7 @@ function Format-EmailExpiring {
   $sig = Get-Content -Path .\html\emailSig.html -Raw
  }
  process {
-  # if (!($_.exchangeData)) { return } # Skip accounts without exchange data (not licensed for O365)
+  if (!$_.exchangeData) { return } # Skip accounts without exchange data (not licensed for O365)
   $endDate = (Get-Date $_.ad.AccountExpirationDate -f 'dddd, MMMM dd, yyyy')
   $userMsg = $baseMsg -f $_.ad.GivenName, $_.ad.Mail, $_.ad.HomePage, $endDate
   $msgBody = ConvertTo-Html -Head $head -Body $userMsg -PostContent $sig -Title 'CUSD Account Expiring'
@@ -323,7 +324,9 @@ function Remove-GoogleLicense ($ou) {
 
   $ErrorActionPreference = 'SilentlyContinue'
 
+  ($gamUser = & $gam redirect stderr null info user $_.ad.HomePage) *>$null
   foreach ($lic in $license) {
+   if ($gamUser -match $lic) { continue }
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkMagenta
    if (!$WhatIf) {
@@ -811,16 +814,21 @@ $adObjsWithExpiration = $adData |
    Set-PropEmp -data $empData |
     Set-PropInfo
 
-Show-BlockInfo 'Account Expiration Emails'
-$adObjsWithExpiration |
- Skip-ADDisabled |
-  Select-ADExpiringSoon -days $GracePeriodDays |
-   Format-EmailExpiring |
-    Send-ExpireAlert $EmailCredential $BccAddress |
-     Show-Object
+if ($SendExpirationAlerts) {
+ Show-BlockInfo 'Send Account Expiration Alert Emails'
+ $adObjsWithExpiration |
+  Skip-ADDisabled |
+   Select-ADExpiringSoon -days $GracePeriodDays |
+    Set-PropExchangeData -data $exchangeData |
+     Format-EmailExpiring |
+      Send-ExpireAlert $EmailCredential $BccAddress |
+       Show-Object
+}
 
 Show-BlockInfo 'Disabling Expired Accounts'
-$disableAccounts = $adObjsWithExpiration | Skip-ADDisabled | Select-ADExpired
+$disableAccounts = $adObjsWithExpiration |
+ Skip-ADDisabled |
+  Select-ADExpired
 $disableAccounts |
  Set-GoogleData |
   Set-PropExchangeData -data $exchangeData |
