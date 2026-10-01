@@ -242,10 +242,10 @@ function Get-ExchangeData {
  $results
 }
 
-function New-ExchangeOnlineSession ($userAccount) {
+function New-ExchangeOnlineSession ( [pscredential]$cred) {
  $sessions = Get-PSSession
  if ($sessions.name -match 'ExchangeOnline') { return }
- Connect-ExchangeOnline -Credential $userAccount -ShowBanner:$false
+ Connect-ExchangeOnline -Credential $cred -ShowBanner:$false
 }
 
 function Remove-ADGroupMemberships ($exGroups, [pscredential]$cred) {
@@ -338,6 +338,10 @@ function Remove-StaffADObject ([pscredential]$cred) {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
   Write-Host ('{0},{1}' -f $msgData) -f Yellow
+  $params = @{
+   Filter     = "ObjectGUID -eq '{0}'" -f $_.ad.ObjectGUID
+   Credential = $cred
+  }
   $removeParams = @{
    Identity    = $_.ad.ObjectGUID
    Confirm     = $False
@@ -345,18 +349,15 @@ function Remove-StaffADObject ([pscredential]$cred) {
    ErrorAction = 'SilentlyContinue'
    WhatIf      = $WhatIf
   }
-  $objParams = @{
-   Filter = "ObjectGUID -eq '{0}'" -f $_.ad.ObjectGUID
-  }
-  $obj = Get-ADUser @objParams
+  $obj = Get-ADUser @params
   Remove-ADUser @removeParams
   if ($WhatIf) { return $_ }
-  $obj = Get-ADUser @objParams
+  $obj = Get-ADUser @params
   if ($obj) {
    Write-Host ('{0},{1},Delete Failed. Trying -Recursive parameter.' -f $msgData) -F Red
    Remove-ADObject @removeParams -Recursive
   }
-  $obj = Get-ADUser @objParams
+  $obj = Get-ADUser @params
   if ($obj -and !$WhatIf) {
    Write-Host ('{0},{1},Remove-ADUser and Remove-ADObject Failed' -f $msgData) -F Red
    return # Stop here and do not process this account at this time
