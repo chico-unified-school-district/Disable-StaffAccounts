@@ -311,7 +311,7 @@ function Remove-GoogleLicense ($ou) {
   $i = 20
   do {
    # Wait for Google Workspace to update user orgUnit
-   ($ouCheck = & $gam print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
+   ($ouCheck = & $gam redirect stderr null print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
    if (!$WhatIf -and !$ouCheck) { Start-Sleep 7 }
    $i--
   } until ($WhatIf -or $ouCheck.orgUnitPath -match $ou -or ($i -eq 0))
