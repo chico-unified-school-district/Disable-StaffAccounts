@@ -62,9 +62,12 @@ function Clear-ExtensionAttributes ([pscredential]$cred) {
 function Convert-ToSharedMailbox {
  process {
   if (!($_.exchangeData)) { return $_ } # bypass if no exchange data (not licensed for O365)
+
   $msgData = $MyInvocation.MyCommand.Name, $_.info
-  if ($_.exchangeData.IsShared -eq $true) { return $_ } # Already Set to Shared
+  if ($_.exchangeData.RecipientTypeDetails -eq 'SharedMailbox') { return $_ } # Already Set to Shared
+
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
+
   if (!$WhatIf) {
    Write-Host ('{0},{1},Waiting for mailbox type change to propagate...' -f $msgData) -F Blue
    Start-Sleep -Seconds 30
@@ -72,10 +75,12 @@ function Convert-ToSharedMailbox {
   $params = @{
    Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   }
-  if ((Get-Mailbox @params).IsShared -ne $true) {
+
+  if ((Get-EXOMailbox @params).SharedMailbox -ne 'SharedMailbox') {
    Write-Warning ('{0},{1},NOT Converted to Shared Mailbox.' -f $msgData)
    if (!$WhatIf) { return } # Skip further processing
   }
+
   Write-Host ('{0},{1},Converted to Shared Mailbox' -f $msgData) -F Green
   $_
  }
@@ -460,14 +465,10 @@ function Select-ADExpired {
 }
 
 function Select-ADExpiredOld ($months) {
- begin { $i = 0 }
+ begin { $cutOffDate = (Get-Date).AddMonths(-$months) }
  process {
-  if ($_.ad.AccountExpirationDate -le ((Get-Date).AddMonths(-$months)) -and $_.ad.Enabled -eq $False) {
-   $i++
-   $_
-  }
+  $_ | Where-Object { ($_.ad.AccountExpirationDate -le $cutOffDate) -and ($_.ad.Enabled -eq $False) }
  }
- end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
 }
 
 function Select-ADExpiringSoon ($days) {
@@ -577,17 +578,6 @@ function Set-GoogleData {
   $_
  }
 }
-
-# function Set-GoogleData {
-#  process {
-#   if (!$_.ad.HomePage) { return $_ }
-#   try { ($_.googleData = & $gam print users query "email:$($_.ad.HomePage)" fields 'archived,suspended,orgUnitPath' | ConvertFrom-Csv)*>$null }
-#   catch {
-#    Write-Host ('{0},{1},Error Getting Google Data' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName) -F Red
-#   }
-#   $_
-#  }
-# }
 
 function Set-PropAD ($data) {
  process {
