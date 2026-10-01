@@ -20,7 +20,6 @@ param (
  [Parameter(Mandatory = $True)][Alias('ADCred')][PSCredential]$ADCredential,
  [Parameter(Mandatory = $false)][string[]]$BccAddress,
  [Parameter(Mandatory = $True)][Alias('License')][string[]]$DefaultGroups,
- [Parameter(Mandatory = $True)][Alias('DCs')][string[]]$DomainControllers,
  [Parameter(Mandatory = $True)][Alias('MailCred')][PSCredential]$EmailCredential,
  [Parameter(Mandatory = $True)][PSCredential]$EmpCredential,
  [Parameter(Mandatory = $True)][string]$EmpDatabase,
