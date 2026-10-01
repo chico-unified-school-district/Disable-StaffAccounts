@@ -17,23 +17,25 @@ https://www.michev.info/Blog/Post/1655/quickly-list-all-groups-a-user-is-member-
 [cmdletbinding()]
 param (
  [Parameter(Mandatory = $True)][string[]]$AccountManagerEmail,
- [Parameter(Mandatory = $True)][Alias('ADCred')][System.Management.Automation.PSCredential]$ActiveDirectoryCredential,
- [Parameter(Mandatory = $True)][Alias('DCs')][string[]]$DomainControllers,
+ [Parameter(Mandatory = $True)][Alias('ADCred')][PSCredential]$ADCredential,
+ [Parameter(Mandatory = $false)][string[]]$BccAddress,
  [Parameter(Mandatory = $True)][Alias('License')][string[]]$DefaultGroups,
- [Parameter(Mandatory = $True)][Alias('MailCred')][System.Management.Automation.PSCredential]$EmailCredential,
- [Parameter(Mandatory = $True)][System.Management.Automation.PSCredential]$EscapeCredential,
- [Parameter(Mandatory = $True)][string]$EscapeDatabase,
- [Parameter(Mandatory = $True)][string]$EscapeServer,
- [Parameter(Mandatory = $True)][Alias('ExchCred')][System.Management.Automation.PSCredential]$ExchangeOnlineCredentials,
+ [Parameter(Mandatory = $True)][Alias('DCs')][string[]]$DomainControllers,
+ [Parameter(Mandatory = $True)][Alias('MailCred')][PSCredential]$EmailCredential,
+ [Parameter(Mandatory = $True)][PSCredential]$EmpCredential,
+ [Parameter(Mandatory = $True)][string]$EmpDatabase,
+ [Parameter(Mandatory = $True)][string]$EmpServer,
+ [Parameter(Mandatory = $True)][Alias('ExchCred')][PSCredential]$ExchangeOnlineCredentials,
  [Parameter(Mandatory = $True)][int]$GracePeriodDays,
- [Parameter(Mandatory = $True)][int]$StaleSubMonths,
  [Parameter(Mandatory = $True)][int]$DisabledMaxMonths,
- [Parameter(Mandatory = $True)][System.Management.Automation.PSCredential]$SISCredential,
+ [Parameter(Mandatory = $True)][string]$OrgUnitNoLicAD,
+ [Parameter(Mandatory = $True)][string]$OrgUnitNoLicGoogle,
+ [Parameter(Mandatory = $True)][string[]]$ProtectedGroups,
+ [Parameter(Mandatory = $True)][PSCredential]$SISCredential,
  [Parameter(Mandatory = $True)][string]$SISDatabase,
  [Parameter(Mandatory = $True)][string]$SISServer,
- [Parameter(Mandatory = $True)][string]$StaffOU,
- [Parameter(Mandatory = $True)][string]$GSuiteNoLicenseOrgUnit,
- [string[]]$BccAddress,
+ # [Parameter(Mandatory = $True)][string]$StaffOU,
+ [Parameter(Mandatory = $True)][int]$StaleSubMonths,
  [Alias('wi')][SWITCH]$WhatIf
 )
 
@@ -47,31 +49,13 @@ function Add-DefaultGroups ($groups) {
  }
 }
 
-function Add-EmpData ($dbParams) {
- begin {
-  $sql = 'SELECT EmailHome from vwHREmploymentList WHERE EmpID = @id'
- }
- process {
-  if ($_.ad.EmployeeID -notmatch '\d') {
-   Write-Host ('{0},{1},EmployeeID not an integer [{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.EmployeeID) -F Red
-   return $_
-  }
-  $sqlVars = "id=$($_.ad.EmployeeID)"
-  $empData = New-SqlOperation @dbParams -Query $sql -Parameters $sqlVars | ConvertTo-Csv | ConvertFrom-Csv
-  if ($empData.EmailHome -like '*@*') {
-   $_.emp += $empData
-  }
-  $_
- }
-}
-
-function Clear-ExtensionAttributes {
+function Clear-ExtensionAttributes ([pscredential]$cred) {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
   # 1. Generate the array of all 15 attribute names
   $AllExtensions = 1..15 | ForEach-Object { "extensionAttribute$_" }
   # 2. Clear them all at once for the target user
-  Set-ADUser -Identity $_.ad.ObjectGUID -Clear $AllExtensions -WhatIf:$WhatIf
+  Set-ADUser -Identity $_.ad.ObjectGUID -Clear $AllExtensions -Credential $cred -WhatIf:$WhatIf
   $_
  }
 }
@@ -80,18 +64,14 @@ function Convert-ToSharedMailbox {
  process {
   if (!($_.exchangeData)) { return $_ } # bypass if no exchange data (not licensed for O365)
   $msgData = $MyInvocation.MyCommand.Name, $_.info
-  $params = @{
-   Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
-  }
-  if ((Get-Mailbox @params).IsShared -eq $true) { return $_ } # Already Set to Shared
-  if (!(Get-Mailbox @params)) {
-   Write-Warning ('{0},{1},Mailbox Not Found.' -f $msgData)
-   return $_
-  }
+  if ($_.exchangeData.IsShared -eq $true) { return $_ } # Already Set to Shared
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
   if (!$WhatIf) {
    Write-Host ('{0},{1},Waiting for mailbox type change to propagate...' -f $msgData) -F Blue
    Start-Sleep -Seconds 30
+  }
+  $params = @{
+   Filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
   }
   if ((Get-Mailbox @params).IsShared -ne $true) {
    Write-Warning ('{0},{1},NOT Converted to Shared Mailbox.' -f $msgData)
@@ -102,22 +82,30 @@ function Convert-ToSharedMailbox {
  }
 }
 
-function Disable-ADAccount {
+function Disable-ADAccount ([pscredential]$cred) {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
   Write-Host ('{0},{1}' -f $msgData ) -F DarkYellow
-  Set-ADUser -Identity $_.ad.ObjectGUID -Enabled:$false -Confirm:$false -WhatIf:$WhatIf
+  $params = @{
+   Identity   = $_.ad.ObjectGUID
+   Enabled    = $false
+   Credential = $cred
+   Confirm    = $false
+   WhatIf     = $WhatIf
+  }
+  Set-ADUser @params
   $_
  }
 }
 
-function Disable-PreventAccidentalDelete {
+function Disable-PreventAccidentalDelete ([pscredential]$cred) {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.info) -F Yellow
   $prevParams = @{
    Identity                        = $_.ad.ObjectGUID
    ProtectedFromAccidentalDeletion = $False
    Confirm                         = $False
+   Credential                      = $cred
    ErrorAction                     = 'Stop'
    WhatIf                          = $WhatIf
   }
@@ -126,7 +114,7 @@ function Disable-PreventAccidentalDelete {
  }
 }
 
-function Disable-GSuiteForwarding {
+function Disable-GoogleForwarding {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info ) -F Blue
   # Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
@@ -142,7 +130,7 @@ function Format-EmailExpiring {
   $sig = Get-Content -Path .\html\emailSig.html -Raw
  }
  process {
-  if (!($_.exchangeData)) { return } # Skip accounts without exchange data (not licensed for O365)
+  # if (!($_.exchangeData)) { return } # Skip accounts without exchange data (not licensed for O365)
   $endDate = (Get-Date $_.ad.AccountExpirationDate -f 'dddd, MMMM dd, yyyy')
   $userMsg = $baseMsg -f $_.ad.GivenName, $_.ad.Mail, $_.ad.HomePage, $endDate
   $msgBody = ConvertTo-Html -Head $head -Body $userMsg -PostContent $sig -Title 'CUSD Account Expiring'
@@ -159,96 +147,100 @@ function Format-EmailExpiring {
  }
 }
 
-function Format-AdminEmail ([string[]]$manager, [string]$type) {
- begin {
-  $mailObj = [PSCustomObject]@{ emailParams = $null }
-  $thisDate = (Get-Date -f 'dddd, MMMM dd, yyyy')
-  $tableData = @()
-  $emailParams = @{
-   To      = $manager
-   Subject = 'CUSD Accounts {0} - {1}' -f $type, $thisDate
-   Body    = $null
-  }
- }
- process { $tableData += $_.ad }
- end {
-  if (@($tableData).count -lt 1) { return }
-  $css = Get-Content -Path '.\html\style.css' -Raw
-  $head = '<style TYPE="TEXT/CSS">' + $css + '</style>'
-  $message = 'The following employee accounts have been {0}:<br><br>' -f $type
-  $sig = Get-Content -Path '.\html\emailSig.html' -Raw
-  $html = $tableData | ConvertTo-Html -Property EmployeeID , Name, Mail -Head $head -PreContent $message -PostContent $sig
-  $emailParams.Body = $html | Out-String
-  Write-Verbose ($emailParams | Out-String )
-  Write-Verbose ( $emailParams.Body )
-  $mailObj.emailParams = $emailParams
-  $mailObj
- }
-}
-
 function Format-Object {
  process {
-  # Write-Verbose ($_.gettype(), $_.ad.SamAccountName | Out-String)
   [PSCustomObject]@{
    ad           = if ($_.ObjectGUID ) { $_ } else { $null }
    exchangeData = $null
    emp          = if ($_.EmpId) { $_ } else { $null }
    emailParams  = $null
    expireDate   = $null
-   gSuiteData   = $null
+   GoogleData   = $null
    info         = $null
   }
  }
 }
 
-function Get-ADWithExpirationDate ($days, $ou) {
+function Get-ADWithExpirationDate ($days, $props, [pscredential]$cred) {
  $futureDate = (Get-Date).AddDays($days)
+ # "(-not(employeeType -eq 'student'))" works, while "EmployeeType -ne 'student'" can fail due to null value
  $filter = "
    AccountExpirationDate -like '*' -and
    AccountExpirationDate -le '$futureDate' -and
    Mail -like '*@*' -and
-   EmployeeID -like '*'
+   EmployeeID -like '*' -and
+   -not(info -like '*keep*') -and
+   (-not(employeeType -eq 'student'))
    "
  $params = @{
   Filter     = $filter
-  Properties = 'EmployeeID', 'Mail', 'AccountExpirationDate', 'HomePage', 'info',
-  'memberOf', 'Description', 'msDS-ExternalDirectoryObjectId', 'LastLogonDate'
-  SearchBase = $ou
+  Properties = $props
+  Credential = $cred
  }
- $results = Get-ADUser @params | Where-Object { $_.info -notmatch 'keep' } | Sort-Object AccountExpirationDate
- Write-Host ( 'AD with expiration date results: {0}' -f @($results).count) -F Green
+ $results = Get-ADUser @params
+ Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
  $results
 }
 
-function Get-ADWithoutExpirationDate {
- process {
-  $filter = "EmployeeID -eq '{0}' -and Enabled -eq 'True'" -f $_.emp.EmpID
-  $properties = 'AccountExpirationDate', 'Description', 'LastLogonDate', 'Mail', 'WhenCreated'
-  $_.ad = Get-ADUser -Filter $filter -Properties $properties | Where-Object {
-   ($_.AccountExpirationDate -isnot [datetime] -and $_.accountExpires -isnot [datetime]) -and
-   $_.info -notmatch 'keep active'
-  }
-  if (!$_.ad) { return }
-  Write-Verbose ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.emp.EmpID)
-  $_
+function Get-ADWithoutExpirationDate ($props, [pscredential]$cred) {
+ $filter = "
+ accountExpires -eq '9223372036854775807' -and
+ Enabled -eq 'True' -and
+ mail -like '*' -and
+ EmployeeID -like '*' -and
+ -not(info -like '*keep*') -and
+ (-not(employeeType -eq 'student'))
+  "
+ $params = @{
+  Filter     = $filter
+  Properties = $props
+  Credential = $cred
  }
+ $results = Get-ADUser @params
+ Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
+ $results
 }
 
-function Get-EscapeRetired ($sqlParams, $query) {
+function Get-ADData ($props, [pscredential]$cred) {
+ $filter = "
+ mail -like '*' -and
+ EmployeeID -like '*' -and
+ -not(info -like '*keep*') -and
+ (-not(employeeType -eq 'student'))
+  "
+ $params = @{
+  Filter     = $filter
+  Properties = $props
+  Credential = $cred
+ }
+ $results = Get-ADUser @params
+ Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
+ $results
+}
+
+function Get-EmpData ($sqlParams) {
+ $sql = "SELECT EmpId, EmailHome from vwHREmploymentList WHERE EmailWork LIKE '%@%'"
+ $results = New-SqlOperation @sqlParams -Query $sql | ConvertTo-Csv | ConvertFrom-Csv
+ Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
+ $results
+}
+
+function Get-EmpRetired ($sqlParams, $query) {
  $results = New-SqlOperation @sqlParams -Query $query | ConvertTo-Csv | ConvertFrom-Csv
- Write-Host ( 'Escape Results Count: {0}' -f @($results).count ) -F Green
+ Write-Host ( '{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count ) -F Green
  $results
 }
 
-function Move-GSuiteAccountToOU ($orgUnit) {
- process {
-  if (!($_.gSuiteData)) { return $_ } # Skip if no GSuite data
-  $ou = if ($orgUnit) { $orgUnit } else { $_.gSuiteData.orgUnitPath }
-  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
-  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" org "$ou")*>null }
-  if ($orgUnit -and !($WhatIf)) { Start-Sleep -Seconds 20 } # Allow time for no license org unit change to propagate before next operation
-  $_
+function Get-ExchangeData {
+ Write-Host ('{0},May take some time...' -f $MyInvocation.MyCommand.Name) -f Yellow
+ $params = @{
+  ResultSize = 'Unlimited'
+  Properties = 'IsShared', 'ForwardingAddress', 'ForwardingSmtpAddress'
+  Verbose    = $false
  }
+ $results = Get-EXOMailbox @params
+ Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
+ $results
 }
 
 function New-ExchangeOnlineSession ($userAccount) {
@@ -257,19 +249,27 @@ function New-ExchangeOnlineSession ($userAccount) {
  Connect-ExchangeOnline -Credential $userAccount -ShowBanner:$false
 }
 
-function Remove-ADGroupMemberships {
+function Remove-ADGroupMemberships ($exGroups, [pscredential]$cred) {
  process {
   $groups = @(($_.ad.memberOf)).ForEach({ $_.Split(',')[0].Replace('CN=', '') })
-  foreach ($group in $_.ad.memberOf) {
-   Remove-ADGroupMember -Identity $group -Members $_.ad.ObjectGUID -Confirm:$false -WhatIf:$WhatIf
+  foreach ($group in $groups) {
+   if ($exGroups -match $group) { continue }
+   $params = @{
+    Identity   = $group
+    Members    = $_.ad.ObjectGUID
+    Confirm    = $false
+    Credential = $cred
+    WhatIf     = $WhatIf
+   }
+   Remove-ADGroupMember @params
+   $msg = $MyInvocation.MyCommand.name, $_.info, $group
+   Write-Host ('{0},{1},[{2}]' -f $msg) -F Blue
   }
-  $msg = $MyInvocation.MyCommand.name, $_.info, ($groups -join ';')
-  Write-Host ('{0},{1},[{2}]' -f $msg) -F Blue
   $_
  }
 }
 
-function Remove-EscapeEmailWork ($sqlParams) {
+function Remove-EmpEmailWork ($sqlParams) {
  begin {
   $sql = 'UPDATE HREmployment SET EmailWork = NULL WHERE EmpID = @id'
  }
@@ -286,7 +286,7 @@ function Remove-EscapeEmailWork ($sqlParams) {
  }
 }
 
-function Remove-GSuiteAccount {
+function Remove-GoogleAccount {
  process {
   if ($gmail -notmatch '@') { return $_ }
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F Blue
@@ -300,16 +300,25 @@ function Remove-GSuiteAccount {
  }
 }
 
-function Remove-GSuiteLicense {
+function Remove-GoogleLicense ($ou) {
  begin {
   $license = @(
-   1010310009 # Google Workspace for Education Plus (Staff)
-   1010310008 # Google Workspace for Education Plus (Staff)
+   # 1010310009 # Google Workspace for Education Plus (Staff)
+   1010310008 # Google Workspace for Education Plus
   )
  }
  process {
-  if (!($_.gSuiteData)) { return $_ } # Skip if no GSuite data
+  if (!($_.googleData)) { return $_ } # Skip if no Google data
+  $i = 20
+  do {
+   # Wait for Google Workspace to update user orgUnit
+   ($ouCheck = & $gam print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
+   if (!$WhatIf -and !$ouCheck) { Start-Sleep 7 }
+   $i--
+  } until ($WhatIf -or $ouCheck.orgUnitPath -match $ou -or ($i -eq 0))
+
   $ErrorActionPreference = 'SilentlyContinue'
+
   foreach ($lic in $license) {
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkMagenta
@@ -320,18 +329,20 @@ function Remove-GSuiteLicense {
     }
    }
   }
+
   $ErrorActionPreference = 'Stop'
   $_
  }
 }
 
-function Remove-StaffADObject {
+function Remove-StaffADObject ([pscredential]$cred) {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
   Write-Host ('{0},{1}' -f $msgData) -f Yellow
   $removeParams = @{
    Identity    = $_.ad.ObjectGUID
    Confirm     = $False
+   Credential  = $cred
    ErrorAction = 'SilentlyContinue'
    WhatIf      = $WhatIf
   }
@@ -442,19 +453,13 @@ function Remove-SharedMailbox {
  }
 }
 
-function Select-Expired {
- begin { $i = 0 }
+function Select-ADExpired {
  process {
-  if ($_.ad.AccountExpirationDate -lt [DateTime]::Today -and
-   ($_.ad.Enabled -eq 'true' -or $_.ad.Enable -eq $true) ) {
-   $i++
-   $_
-  }
+  $_ | Where-Object { $_.ad.AccountExpirationDate -le ([DateTime]::Today) }
  }
- end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
 }
 
-function Select-ExpiredOld ($months) {
+function Select-ADExpiredOld ($months) {
  begin { $i = 0 }
  process {
   if ($_.ad.AccountExpirationDate -le ((Get-Date).AddMonths(-$months)) -and $_.ad.Enabled -eq $False) {
@@ -465,23 +470,21 @@ function Select-ExpiredOld ($months) {
  end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
 }
 
-function Select-ExpiringAccounts ([int]$days) {
+function Select-ADExpiringSoon ($days) {
  begin {
-  $i = 0
-  function Format-DateToInt { process { [int]$((Get-Date).AddDays($_) | Get-Date -f yyyyMMdd) } }
+  $today = [datetime]::Today
+  $cutOffData = $today.AddDays($days)
  }
  process {
-  if (($_.ad.Enable -eq $false) -or ($_.ad.Enable -eq 'false')) { return } # Skip Disabled accounts
-  # if (!($_.exchangeData)) { return } # Skip accounts without exchange data (not licensed for O365)
-  Write-Verbose ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.info)
-  [int]$accExprDate = Get-Date $_.ad.AccountExpirationDate -f yyyyMMdd
-  # Compare account expiration date ($accExprDate) to a specific day increment ($checkDate).
-  foreach ($checkDate in (1..$days | Format-DateToInt)) {
-   # If match then pass input object to next step in pipeline
-   if ($checkDate -eq $accExprDate) { $i++; $_ }
-  }
+  $expDate = $_.ad.AccountExpirationDate
+  $_ | Where-Object { $expDate -lt $today -or $expDate -gt $cutOffData }
  }
- end { Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, $i) -f Green }
+}
+
+function Select-ADWithExpiration {
+ process {
+  $_ | Where-Object { $_.ad.AccountExpirationDate -is [datetime] }
+ }
 }
 
 function Select-StaleSub ($months) {
@@ -530,14 +533,22 @@ function Send-ExpireAlert ($emailSender, $bcc) {
   Write-Verbose ($params | Out-String)
   $msg = $MyInvocation.MyCommand.name, ($params.To -join ','), $params.Subject
   Write-Host ('{0},Recipient: [{1}],Subject: [{2}]' -f $msg) -F Green
+  $_
  }
 }
 
-function Set-ADDescription ($msg) {
+function Set-ADDescription ($msg, [pscredential]$cred) {
  process {
   $newDesc = '{0} <{1} {2}>' -f $_.ad.Description, $msg, (Get-Date $_.expireDate -f 'yyyy-MM-dd')
-  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $newDesc) -f DarkMagenta
-  Set-ADUser -Identity $_.ad.ObjectGUID -Description $newDesc -Confirm:$false -WhatIf:$WhatIf
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $newDesc) -f Magenta
+  $params = @{
+   Identity    = $_.ad.ObjectGUID
+   Description = $newDesc
+   Credential  = $cred
+   Confirm     = $false
+   WhatIf      = $WhatIf
+  }
+  Set-ADUser @params
   $_
  }
 }
@@ -553,56 +564,25 @@ function Set-AeriesSTFInactive ($params) {
  }
 }
 
-function Set-ExchangeData {
- begin {
-  New-Item -Path .\log -ItemType Directory -Force | Out-Null
-  $oldLogs = Get-ChildItem -Path .\log
-  Write-Host ('{0},Removing old log files...' -f $MyInvocation.MyCommand.Name) -F Cyan
-  $oldLogs | Remove-Item -Force -Confirm:$false
-  $logPath = ".\log\missing-mailboxes-$(Get-Date -f yyyy-MM-dd).csv"
-  $list = New-Object System.Collections.Generic.List[string]
-  $list.Add('id,name,mail,accountExpirationDate,lastLogonDate')
- }
+function Set-ADExpireDate ([pscredential]$cred) {
  process {
-  $filter = "UserPrincipalName -eq '{0}'" -f $_.ad.UserPrincipalName
-  $_.exchangeData = Get-Mailbox -Filter $filter -ErrorAction SilentlyContinue
-  if (!($_.exchangeData)) {
-   Write-Verbose ('{0},{1},Mailbox Not Found.' -f $MyInvocation.MyCommand.Name, $_.info)
-   $list.Add($_.info)
+  $params = @{
+   Identity   = $_.ad.ObjectGUID
+   DateTime   = $_.expireDate
+   Credential = $cred
+   Confirm    = $false
+   WhatIf     = $WhatIf
   }
-  $_
- }
- end {
-  if ($list.Count -gt 1) {
-   $list | Out-File -FilePath $logPath -Encoding utf8 -Force -Confirm:$false
-   Write-Host ('{0}, Missing Mailbox log exported to: {1}' -f $MyInvocation.MyCommand.Name, $logPath) -F Green
-  }
- }
-}
-
-function Set-ExpireDate ([int]$days) {
- begin {
-  # Remove-Item -Path '.\Set-ExpireDate.csv' -ErrorAction SilentlyContinue
-  # "EmpId,Name,Email,Target Expiration,LastLogon" | Out-File -FilePath '.\Set-ExpireDate.csv'
- }
- process {
-  $lastDay = if ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay }
-  elseif ($_.emp.DateTermination -match '\d') { $_.emp.DateTermination }
-  else { (Get-Date).AddDays(14) } # Default to 2 weeks if no last day found
-  $_.expireDate = (Get-Date $lastDay).AddDays($days)
-  $msgData = $MyInvocation.MyCommand.name, $_.emp.EmpId, $_.ad.UserPrincipalName, $_.expireDate, $_.ad.LastLogonDate
-  Write-Host ('{0},{1},{2},Target Expiration: {3},LastLogon: {4}' -f $msgData) -F Magenta
-  Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $_.expireDate -Confirm:$false -WhatIf:$WhatIf
-  # '{0},{1},{2},{3},{4}' -f $_.emp.EmpId, $_.ad.Name, $_.ad.Mail, $_.expireDate, $_.ad.LastLogonDate |
-  #  Out-File -FilePath '.\Set-ExpireDate.csv' -Append
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.expireDate) -F Magenta
+  Set-ADAccountExpiration @params
   $_
  }
 }
 
-function Set-GSuiteArchiveState {
+function Set-GoogleArchiveState {
  process {
-  if (!($_.gSuiteData)) { return $_ } # Skip if no GSuite data
-  if ($_.gSuiteData.archived -eq $true) { return $_ } # Already archived
+  if (!($_.googleData)) { return $_ } # Skip if no Google data
+  if ($_.googleData.archived -eq $true) { return $_ } # Already archived
   Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkBlue
   if (!$WhatIf) {
    (& $gam update user "$($_.ad.HomePage)" archived on)*>null
@@ -612,53 +592,178 @@ function Set-GSuiteArchiveState {
  }
 }
 
-function Set-GSuiteData {
+function Set-GoogleData {
  process {
-  try { ($_.gSuiteData = & $gam print users query "email:$($_.ad.HomePage)" fields 'archived,suspended,orgUnitPath' | ConvertFrom-Csv)*>$null }
+  try { ($_.googleData = & $gam print users query "email:$($_.ad.HomePage)" fields 'archived,suspended,orgUnitPath' | ConvertFrom-Csv)*>$null }
   catch {
-   Write-Host ('{0},{1},Error Getting GSuite Data' -f $MyInvocation.MyCommand.Name, $_.info) -F Red
+   Write-Host ('{0},{1},Error Getting Google Data' -f $MyInvocation.MyCommand.Name, $_.info) -F Red
   }
   $_
  }
 }
 
-function Set-Info {
+function Set-PropAD ($adData) {
+ process {
+  $id = $_.emp.EmpId
+  $_.ad = $adData.Where({ $_.EmployeeId -eq $id })
+  if (!$_.ad) { return }
+  $_
+ }
+}
+
+function Set-PropEmailParams ([string[]]$manager, [string]$type) {
+ begin {
+  $mailObj = [PSCustomObject]@{ emailParams = $null }
+  $thisDate = (Get-Date -f 'dddd, MMMM dd, yyyy')
+  $tableData = @()
+  $emailParams = @{
+   To      = $manager
+   Subject = 'CUSD Accounts {0} - {1}' -f $type, $thisDate
+   Body    = $null
+  }
+ }
+ process { $tableData += $_.ad }
+ end {
+  if (@($tableData).count -lt 1) { return }
+  $css = Get-Content -Path '.\html\style.css' -Raw
+  $head = '<style TYPE="TEXT/CSS">' + $css + '</style>'
+  $message = 'The following employee accounts have been {0}:<br><br>' -f $type
+  $sig = Get-Content -Path '.\html\emailSig.html' -Raw
+  $html = $tableData | ConvertTo-Html -Property EmployeeID , Name, Mail -Head $head -PreContent $message -PostContent $sig
+  $emailParams.Body = $html | Out-String
+  Write-Verbose ($emailParams | Out-String )
+  Write-Verbose ( $emailParams.Body )
+  $mailObj.emailParams = $emailParams
+  $mailObj
+ }
+}
+
+function Set-PropExchangeData ($data) {
+ process {
+  $upn = $_.ad.UserPrincipalName
+  # if (!($data).count -eq 0) { return $_ }
+  $_.exchangeData = if ($data) {
+   $data.Where({ $_.UserPrincipalName -eq $upn })
+  }
+  else {
+   Get-EXOMailbox -UserPrincipalName $upn -ErrorAction SilentlyContinue
+  }
+  if (!($_.exchangeData)) {
+   Write-Verbose ('{0},{1},Mailbox Not Found.' -f $MyInvocation.MyCommand.Name, $_.info)
+  }
+  $_
+ }
+}
+
+function Set-PropEmp ($data) {
+ process {
+  $id = $_.ad.EmployeeId
+  $_.emp = $data.Where({ [int]$_.empId -eq [int]$id })
+  $_
+ }
+}
+
+function Set-PropExpireDate ([int]$days) {
+ process {
+  $lastDay = if ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay }
+  elseif ($_.emp.DateTermination -match '\d') { $_.emp.DateTermination }
+  else { (Get-Date).AddDays(14) } # Default to 2 weeks if no last day found
+  $_.expireDate = (Get-Date $lastDay).AddDays($days)
+  $msgData = $MyInvocation.MyCommand.name, $_.emp.EmpId, $_.ad.UserPrincipalName, $_.expireDate, $_.ad.LastLogonDate
+  Write-Host ('{0},{1},{2},Target Expiration: {3},LastLogon: {4}' -f $msgData) -F Green
+  $_
+ }
+}
+
+function Set-PropInfo {
  process {
   $_.info = '[{0},{1},{2},{3},{4}]' -f $_.ad.EmployeeID, $_.ad.Name, $_.ad.Mail, $_.ad.AccountExpirationDate, $_.ad.LastLogonDate
   $_
  }
 }
-function Set-RandomPassword {
+
+function Set-RandomPassword ([pscredential]$cred) {
  process {
   Write-Host('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
-  $securePw = ConvertTo-SecureString -String (New-RandomPassword 20) -AsPlainText -Force
-  Set-ADAccountPassword -Identity $_.ad.ObjectGUID -NewPassword $securePw -Confirm:$false -WhatIf:$WhatIf
+  $params = @{
+   Identity    = $_.ad.ObjectGUID
+   NewPassword = ConvertTo-SecureString -String (New-RandomPassword 20) -AsPlainText -Force
+   Credential  = $cred
+   Confirm     = $false
+   WhatIf      = $WhatIf
+  }
+  Set-ADAccountPassword @params
   $_
  }
 }
 
 function Show-Object {
+ begin { $i = 0 }
  process {
-  if ($_) { Write-Verbose ($MyInvocation.MyCommand.name, $_ | Out-String) }
+  if ($_) {
+   Write-Verbose ($MyInvocation.MyCommand.name, $_ | Out-String)
+   $i++
+  }
+ }
+ end { Write-Verbose ('Total objects processed: {0}' -f $i) }
+}
+
+function Skip-DisabledAccounts {
+ process {
+  if ($_.ad.Enabled -eq $false) { return }
+  $_
  }
 }
 
-function Suspend-GSuiteAccount {
+function Suspend-GoogleAccount {
  process {
-  if (!($_.gSuiteData)) { return $_ } # Skip if no GSuite data
-  if ($_.gSuiteData.suspended -eq $true) { return $_ } # Already suspended
+  if (!($_.googleData)) { return $_ } # Skip if no Google data
+  if ($_.googleData.suspended -eq $true) { return $_ } # Already suspended
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F Blue
   if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" suspended on)*>null }
   $_
  }
 }
 
-function Update-ADStaleSubExpireDate ([int]$days) {
+function Set-ADExpireDateStateSub ([int]$days, [pscredential]$cred) {
  begin { $expireDate = (Get-Date).AddDays($days) }
  process {
   Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $expireDate) -F Cyan
-  Set-ADUser -Identity $_.ad.ObjectGUID -AccountExpirationDate $expireDate -Confirm:$false -WhatIf:$WhatIf
+  $params = @{
+   Identity              = $_.ad.ObjectGUID
+   AccountExpirationDate = $expireDate
+   Credential            = $cred
+   Confirm               = $false
+   WhatIf                = $WhatIf
+  }
+  Set-ADAccountExpiration @params
   $_.expireDate = $expireDate
+  $_
+ }
+}
+
+function Update-OrgUnitAD ($ou, [pscredential]$cred) {
+ process {
+  if ($_.ad.DistinguishedName -match $ou ) { return $_ }
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
+  $params = @{
+   Identity   = $_.ad.ObjectGUID
+   TargetPath = $ou
+   Confirm    = $false
+   Credential = $cred
+   WhatIf     = $WhatIf
+  }
+  Move-ADObject @params
+  $_
+ }
+}
+
+function Update-OrgUnitGoogle ($ou) {
+ process {
+  if (!$_.googleData) { return $_ }
+  if ($_.googleData.orgUnitPath -match $ou) { return $_ }
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
+  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" org "$ou")*>null }
   $_
  }
 }
@@ -674,14 +779,10 @@ $gam = 'C:\GAM7\gam.exe'
 if ($WhatIf) { Show-TestRun }
 Clear-SessionData
 
-$adCmdLets = 'Get-ADUser', 'Set-ADUser', 'Remove-ADObject', 'Remove-ADUser', 'Remove-ADGroupMember', 'Add-ADGroupMember',
-'Set-ADAccountPassword', 'Set-ADObject'
-Connect-ADSession -DomainControllers $DomainControllers -Cmdlets $adCmdLets -cred $ActiveDirectoryCredential
-
 $empDBParams = @{
- Server     = $EscapeServer
- Database   = $EscapeDatabase
- Credential = $EscapeCredential
+ Server     = $EmpServer
+ Database   = $EmpDatabase
+ Credential = $EmpCredential
 }
 
 $SISParams = @{
@@ -690,71 +791,89 @@ $SISParams = @{
  Credential = $SISCredential
 }
 
-Show-BlockInfo 'Set Stale Sub Expirations'
-Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw) |
- Format-Object |
-  Get-ADWithoutExpirationDate |
-   Select-StaleSub $StaleSubMonths |
-    Update-ADStaleSubExpireDate $GracePeriodDays |
-     Set-ADDescription 'Expiration Date Set' |
-      Show-Object
+$adProps = 'EmployeeID', 'Mail', 'AccountExpirationDate', 'accountExpires', 'HomePage', 'info',
+'memberOf', 'Description', 'msDS-ExternalDirectoryObjectId', 'LastLogonDate', 'WhenCreated'
+$adData = Get-ADData -props $adProps -cred $ADCredential
 
-Show-BlockInfo 'Set Account Expirations'
-Get-EscapeRetired $empDBParams (Get-Content -Path '.\sql\retired-terminated.sql' -Raw) |
- Format-Object |
-  Get-ADWithoutExpirationDate |
-   Set-ExpireDate $GracePeriodDays |
-    Set-ADDescription 'Expiration Date Set' |
-     Show-Object
+# $adNoExpirationData = Get-ADWithoutExpirationDate -props $adProps -cred $ADCredential
+
+# Show-BlockInfo 'Set Stale Sub Expirations'
+# Get-EmpRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw) |
+#  Format-Object |
+#   Set-PropAD -adData $adNoExpirationData |
+#    Select-StaleSub $StaleSubMonths |
+#     Set-ADExpireDateStateSub -days $GracePeriodDays -cred $ADCredential |
+#      Set-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
+#       Show-Object
+
+# Show-BlockInfo 'Set Account Expirations'
+# Get-EmpRetired -sqlParams $empDBParams -query (Get-Content -Path '.\sql\retired-terminated.sql' -Raw) |
+#  Format-Object |
+#   Set-PropAD -adData $adNoExpirationData |
+#    Set-PropExpireDate -days $GracePeriodDays |
+#     Set-ADExpireDate -cred $ADCredential |
+#      Set-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
+#       Show-Object
 
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
 
-$expireADObjects = Get-ADWithExpirationDate $GracePeriodDays $StaffOU |
- Format-Object |
-  Set-Info
+# $exchangeData = Get-ExchangeData
+$empData = Get-EmpData -sqlParams $empDBParams
 
-Show-BlockInfo 'Account Expiration Emails'
-$expireADObjects |
- Select-ExpiringAccounts 14 |
-  Set-ExchangeData |
-   Add-EmpData $empDBParams |
-    Format-EmailExpiring |
-     Send-ExpireAlert $EmailCredential $BccAddress
+# $adObjsWithExpiration = Get-ADWithExpirationDate -days $GracePeriodDays -props $adProps -cred $ADCredential |
+$adObjsWithExpiration = $adData |
+ Format-Object |
+  Select-ADWithExpiration |
+   Set-PropEmp -data $empData |
+    Set-PropInfo
+
+# Show-BlockInfo 'Account Expiration Emails'
+# $adObjsWithExpiration |
+#  Skip-DisabledAccounts |
+#   Select-ADExpiringSoon -days $GracePeriodDays |
+#    Format-EmailExpiring |
+#     Send-ExpireAlert $EmailCredential $BccAddress |
+#      Show-Object
 
 Show-BlockInfo 'Disabling Expired Accounts'
-$expireADObjects |
- Select-Expired |
-  Set-ExchangeData |
-   Set-GSuiteData |
-    Convert-ToSharedMailbox |
-     Disable-ADAccount |
-      Set-RandomPassword |
-       Clear-ExtensionAttributes |
-        Remove-ADGroupMemberships |
-         Disable-GSuiteForwarding |
-          Set-AeriesSTFInactive $SISParams |
-           Remove-FromO365Groups |
-            Remove-O365Forwarding |
-             Suspend-GSuiteAccount |
-              Set-GSuiteArchiveState |
-               Move-GSuiteAccountToOU $GSuiteNoLicenseOrgUnit |
-                # Remove-GSuiteLicense |
-                Move-GSuiteAccountToOU |
-                 Format-AdminEmail $AccountManagerEmail Disabled |
-                  Send-ExpireAlert $EmailCredential
+$disableAccounts = $adObjsWithExpiration | Skip-DisabledAccounts | Select-ADExpired
+$disableAccounts |
+ Set-GoogleData |
+  Set-PropExchangeData -data $exchangeData |
+   Convert-ToSharedMailbox |
+    Clear-ExtensionAttributes -cred $ADCredential |
+     Remove-ADGroupMemberships -exGroups $ProtectedGroups -cred $ADCredential |
+      Disable-GoogleForwarding |
+       Set-AeriesSTFInactive $SISParams |
+        Remove-FromO365Groups |
+         Remove-O365Forwarding |
+          Suspend-GoogleAccount |
+           Set-GoogleArchiveState |
+            Update-OrgUnitAD -ou $OrgUnitNoLicAD -cred $ADCredential |
+             Update-OrgUnitGoogle -ou $OrgUnitNoLicGoogle |
+              Remove-GoogleLicense -ou $OrgUnitNoLicGoogle |
+               Set-RandomPassword -cred $ADCredential |
+                Disable-ADAccount -cred $ADCredential |
+                 Show-Object
 
-Show-BlockInfo 'Remove Old Expired Accounts'
-$expireADObjects |
- Select-ExpiredOld -months $DisabledMaxMonths |
-  Set-ExchangeData |
-   Remove-UGNReference $sisParams |
-    Remove-GSuiteAccount |
-     Remove-EscapeEmailWork $empDBParams |
-      Disable-PreventAccidentalDelete |
-       Remove-StaffADObject |
-        Remove-SharedMailbox |
-         Format-AdminEmail $AccountManagerEmail Removed |
-          Send-ExpireAlert $EmailCredential
+Show-BlockInfo 'Email disabled accounts report'
+$disableAccounts |
+ Set-PropEmailParams $AccountManagerEmail Disabled |
+  Send-ExpireAlert $EmailCredential |
+   Show-Object
+
+# Show-BlockInfo 'Remove Old Expired Accounts'
+# $adObjsWithExpiration |
+#  Select-ADExpiredOld -months $DisabledMaxMonths |
+#   Remove-UGNReference $sisParams |
+#    Remove-GoogleAccount |
+#     Remove-EmpEmailWork $empDBParams |
+#      Disable-PreventAccidentalDelete -cred $ADCredential |
+#       Remove-StaffADObject -cred $ADCredential |
+#        Remove-SharedMailbox |
+#         Set-PropEmailParams $AccountManagerEmail Removed |
+#          Send-ExpireAlert $EmailCredential |
+#           Show-Object
 
 Disconnect-ExchangeOnline -Confirm:$false
 # =========================================================================================
