@@ -569,9 +569,10 @@ function Set-GoogleArchiveState {
 
 function Set-GoogleData {
  process {
+  if (!$_.ad.HomePage) { return $_ }
   try { ($_.googleData = & $gam print users query "email:$($_.ad.HomePage)" fields 'archived,suspended,orgUnitPath' | ConvertFrom-Csv)*>$null }
   catch {
-   Write-Host ('{0},{1},Error Getting Google Data' -f $MyInvocation.MyCommand.Name, $_.info) -F Red
+   Write-Host ('{0},{1},Error Getting Google Data' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName) -F Red
   }
   $_
  }
