@@ -118,7 +118,7 @@ function Disable-GoogleForwarding {
  process {
   Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info ) -F Blue
   # Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
-  if (!$WhatIf) { (& $gam user "$($_.ad.homepage)" forward off)*>null }
+  if (!$WhatIf) { (& $gam user "$($_.ad.homepage)" forward off)*>$null }
   $_
  }
 }
@@ -215,7 +215,7 @@ function Get-ADData ($props, [pscredential]$cred) {
  }
  $results = Get-ADUser @params
  Write-Host ('{0},Count: {1}' -f $MyInvocation.MyCommand.Name, @($results).count) -F Green
- $results
+ $results | Sort-Object -Property LastLogonDate
 }
 
 function Get-EmpData ($sqlParams) {
@@ -477,7 +477,7 @@ function Select-ADExpiringSoon ($days) {
  }
  process {
   $expDate = $_.ad.AccountExpirationDate
-  $_ | Where-Object { $expDate -lt $today -or $expDate -gt $cutOffData }
+  $_ | Where-Object { $expDate -gt $today -and $expDate -lt $cutOffData }
  }
 }
 
@@ -487,27 +487,18 @@ function Select-ADWithExpiration {
  }
 }
 
+function Select-ADWithoutExpiration {
+ process {
+  $_ | Where-Object { $_.ad.AccountExpirationDate -isnot [datetime] }
+ }
+}
+
 function Select-StaleSub ($months) {
  begin {
   $subCutOffDate = (Get-Date).AddMonths(-$months)
  }
  process {
-  $whenCreated = Get-Date $_.ad.whenCreated -f 'MM/dd/yyyy'
-  $lastLogon = if ($_.ad.LastLogonDate) { Get-Date $_.ad.LastLogonDate -f 'MM/dd/yyyy' } else { 'Never' }
-  $msgData = $MyInvocation.MyCommand.Name, $_.ad.Mail, $whenCreated, $lastLogon
-  # No lastLogonDate but created within the last x months
-  if (!($_.ad.LastLogonDate) -and ($_.ad.whenCreated -gt $subCutOffDate)) {
-   Write-Verbose ('{0},{1},Created:{2},Logon:{4},Sub account too new' -f $msgData)
-   return
-  }
-  # Logged in within the last x months
-  if (($_.ad.LastLogonDate) -and ($_.ad.LastLogonDate -gt $subCutOffDate) ) {
-   Write-Verbose ('{0},{1},Created:{2},Logon:{3},Sub account logged in recently' -f $msgData)
-   return
-  }
-  # If here then stale sub account
-  Write-Host ('{0},{1},Created:{2},Logon:{3},Stale sub account detected' -f $msgData) -f Yellow
-  $_
+  $_ | Where-Object { ($_.ad.LastLogonDate -lt $subCutOffDate) -and ($_.ad.whenCreated -lt $subCutOffDate) }
  }
 }
 
@@ -537,22 +528,6 @@ function Send-ExpireAlert ($emailSender, $bcc) {
  }
 }
 
-function Set-ADDescription ($msg, [pscredential]$cred) {
- process {
-  $newDesc = '{0} <{1} {2}>' -f $_.ad.Description, $msg, (Get-Date $_.expireDate -f 'yyyy-MM-dd')
-  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $newDesc) -f Magenta
-  $params = @{
-   Identity    = $_.ad.ObjectGUID
-   Description = $newDesc
-   Credential  = $cred
-   Confirm     = $false
-   WhatIf      = $WhatIf
-  }
-  Set-ADUser @params
-  $_
- }
-}
-
 function Set-AeriesSTFInactive ($params) {
  begin { $sql = "UPDATE STF SET tg = 'i' WHERE id = @id" }
  process {
@@ -573,7 +548,7 @@ function Set-ADExpireDate ([pscredential]$cred) {
    Confirm    = $false
    WhatIf     = $WhatIf
   }
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.expireDate) -F Magenta
+  Write-Host ('{0},{1},Target Date: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.expireDate) -F Magenta
   Set-ADAccountExpiration @params
   $_
  }
@@ -602,10 +577,10 @@ function Set-GoogleData {
  }
 }
 
-function Set-PropAD ($adData) {
+function Set-PropAD ($data) {
  process {
   $id = $_.emp.EmpId
-  $_.ad = $adData.Where({ $_.EmployeeId -eq $id })
+  $_.ad = $data.Where({ $_.EmployeeId -eq $id })
   if (!$_.ad) { return }
   $_
  }
@@ -646,7 +621,8 @@ function Set-PropExchangeData ($data) {
    $data.Where({ $_.UserPrincipalName -eq $upn })
   }
   else {
-   Get-EXOMailbox -UserPrincipalName $upn -ErrorAction SilentlyContinue
+   $filter = "UserPrincipalName -eq '$upn'"
+   Get-EXOMailbox -Filter $filter -ErrorAction SilentlyContinue
   }
   if (!($_.exchangeData)) {
    Write-Verbose ('{0},{1},Mailbox Not Found.' -f $MyInvocation.MyCommand.Name, $_.info)
@@ -663,21 +639,23 @@ function Set-PropEmp ($data) {
  }
 }
 
-function Set-PropExpireDate ([int]$days) {
+function Set-PropExpireDate ($days) {
+ begin { $today = [datetime]::Today }
  process {
-  $lastDay = if ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay }
+  $lastDay = if ($_.emp.EmploymentStatusCode -match 'S') { $today }
+  elseif ($_.emp.DateTerminationLastDay -match '\d') { $_.emp.DateTerminationLastDay }
   elseif ($_.emp.DateTermination -match '\d') { $_.emp.DateTermination }
-  else { (Get-Date).AddDays(14) } # Default to 2 weeks if no last day found
+  else { $today }
+
   $_.expireDate = (Get-Date $lastDay).AddDays($days)
-  $msgData = $MyInvocation.MyCommand.name, $_.emp.EmpId, $_.ad.UserPrincipalName, $_.expireDate, $_.ad.LastLogonDate
-  Write-Host ('{0},{1},{2},Target Expiration: {3},LastLogon: {4}' -f $msgData) -F Green
   $_
  }
 }
 
 function Set-PropInfo {
  process {
-  $_.info = '[{0},{1},{2},{3},{4}]' -f $_.ad.EmployeeID, $_.ad.Name, $_.ad.Mail, $_.ad.AccountExpirationDate, $_.ad.LastLogonDate
+  $msg = $_.ad.EmployeeID, $_.ad.Mail, $_.ad.AccountExpirationDate, $_.ad.LastLogonDate
+  $_.info = '[{0},{1},Exp:[{2}],LastLogon:[{3}]]' -f $msg
   $_
  }
 }
@@ -708,7 +686,7 @@ function Show-Object {
  end { Write-Verbose ('Total objects processed: {0}' -f $i) }
 }
 
-function Skip-DisabledAccounts {
+function Skip-ADDisabled {
  process {
   if ($_.ad.Enabled -eq $false) { return }
   $_
@@ -725,19 +703,19 @@ function Suspend-GoogleAccount {
  }
 }
 
-function Set-ADExpireDateStateSub ([int]$days, [pscredential]$cred) {
- begin { $expireDate = (Get-Date).AddDays($days) }
+function Update-ADDescription ($msg, [pscredential]$cred) {
  process {
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.ad.SamAccountName, $expireDate) -F Cyan
+  if ($_.ad.Description -match 'Expiration Date') { return $_ }
+  $newDesc = '{0} <{1} {2}>' -f $_.ad.Description, $msg, (Get-Date $_.expireDate -f 'yyyy-MM-dd')
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $newDesc) -f Magenta
   $params = @{
-   Identity              = $_.ad.ObjectGUID
-   AccountExpirationDate = $expireDate
-   Credential            = $cred
-   Confirm               = $false
-   WhatIf                = $WhatIf
+   Identity    = $_.ad.ObjectGUID
+   Description = $newDesc
+   Credential  = $cred
+   Confirm     = $false
+   WhatIf      = $WhatIf
   }
-  Set-ADAccountExpiration @params
-  $_.expireDate = $expireDate
+  Set-ADUser @params
   $_
  }
 }
@@ -795,48 +773,52 @@ $adProps = 'EmployeeID', 'Mail', 'AccountExpirationDate', 'accountExpires', 'Hom
 'memberOf', 'Description', 'msDS-ExternalDirectoryObjectId', 'LastLogonDate', 'WhenCreated'
 $adData = Get-ADData -props $adProps -cred $ADCredential
 
-# $adNoExpirationData = Get-ADWithoutExpirationDate -props $adProps -cred $ADCredential
+Show-BlockInfo 'Set Stale Sub Expirations'
+Get-EmpRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw) |
+ Format-Object |
+  Set-PropAD -data $adData |
+   Select-ADWithoutExpiration |
+    Skip-ADDisabled |
+     Set-PropInfo |
+      Select-StaleSub -months $StaleSubMonths |
+       Set-PropExpireDate -days $GracePeriodDays |
+        Set-ADExpireDate -cred $ADCredential |
+         Update-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
+          Show-Object
 
-# Show-BlockInfo 'Set Stale Sub Expirations'
-# Get-EmpRetired $empDBParams (Get-Content -Path '.\sql\retired-subs.sql' -Raw) |
-#  Format-Object |
-#   Set-PropAD -adData $adNoExpirationData |
-#    Select-StaleSub $StaleSubMonths |
-#     Set-ADExpireDateStateSub -days $GracePeriodDays -cred $ADCredential |
-#      Set-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
-#       Show-Object
-
-# Show-BlockInfo 'Set Account Expirations'
-# Get-EmpRetired -sqlParams $empDBParams -query (Get-Content -Path '.\sql\retired-terminated.sql' -Raw) |
-#  Format-Object |
-#   Set-PropAD -adData $adNoExpirationData |
-#    Set-PropExpireDate -days $GracePeriodDays |
-#     Set-ADExpireDate -cred $ADCredential |
-#      Set-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
-#       Show-Object
+Show-BlockInfo 'Set Account Expirations'
+Get-EmpRetired -sqlParams $empDBParams -query (Get-Content -Path '.\sql\retired-terminated.sql' -Raw) |
+ Format-Object |
+  Set-PropAD -data $adData |
+   Select-ADWithoutExpiration |
+    Skip-ADDisabled |
+     Set-PropInfo |
+      Set-PropExpireDate -days $GracePeriodDays |
+       Set-ADExpireDate -cred $ADCredential |
+        Update-ADDescription -msg 'Expiration Date Set' -cred $ADCredential |
+         Show-Object
 
 New-ExchangeOnlineSession $ExchangeOnlineCredentials
 
-# $exchangeData = Get-ExchangeData
+# # $exchangeData = Get-ExchangeData # Maybe not needed
 $empData = Get-EmpData -sqlParams $empDBParams
 
-# $adObjsWithExpiration = Get-ADWithExpirationDate -days $GracePeriodDays -props $adProps -cred $ADCredential |
 $adObjsWithExpiration = $adData |
  Format-Object |
   Select-ADWithExpiration |
    Set-PropEmp -data $empData |
     Set-PropInfo
 
-# Show-BlockInfo 'Account Expiration Emails'
-# $adObjsWithExpiration |
-#  Skip-DisabledAccounts |
-#   Select-ADExpiringSoon -days $GracePeriodDays |
-#    Format-EmailExpiring |
-#     Send-ExpireAlert $EmailCredential $BccAddress |
-#      Show-Object
+Show-BlockInfo 'Account Expiration Emails'
+$adObjsWithExpiration |
+ Skip-ADDisabled |
+  Select-ADExpiringSoon -days $GracePeriodDays |
+   Format-EmailExpiring |
+    Send-ExpireAlert $EmailCredential $BccAddress |
+     Show-Object
 
 Show-BlockInfo 'Disabling Expired Accounts'
-$disableAccounts = $adObjsWithExpiration | Skip-DisabledAccounts | Select-ADExpired
+$disableAccounts = $adObjsWithExpiration | Skip-ADDisabled | Select-ADExpired
 $disableAccounts |
  Set-GoogleData |
   Set-PropExchangeData -data $exchangeData |
@@ -862,18 +844,19 @@ $disableAccounts |
   Send-ExpireAlert $EmailCredential |
    Show-Object
 
-# Show-BlockInfo 'Remove Old Expired Accounts'
-# $adObjsWithExpiration |
-#  Select-ADExpiredOld -months $DisabledMaxMonths |
-#   Remove-UGNReference $sisParams |
-#    Remove-GoogleAccount |
-#     Remove-EmpEmailWork $empDBParams |
-#      Disable-PreventAccidentalDelete -cred $ADCredential |
-#       Remove-StaffADObject -cred $ADCredential |
-#        Remove-SharedMailbox |
-#         Set-PropEmailParams $AccountManagerEmail Removed |
-#          Send-ExpireAlert $EmailCredential |
-#           Show-Object
+Show-BlockInfo 'Remove Old Expired Accounts'
+$adObjsWithExpiration |
+ Select-ADExpiredOld -months $DisabledMaxMonths |
+  Set-PropExchangeData -data $exchangeData |
+   Remove-UGNReference $sisParams |
+    Remove-GoogleAccount |
+     Remove-EmpEmailWork $empDBParams |
+      Disable-PreventAccidentalDelete -cred $ADCredential |
+       Remove-StaffADObject -cred $ADCredential |
+        Remove-SharedMailbox |
+         Set-PropEmailParams $AccountManagerEmail Removed |
+          Send-ExpireAlert $EmailCredential |
+           Show-Object
 
 Disconnect-ExchangeOnline -Confirm:$false
 # =========================================================================================

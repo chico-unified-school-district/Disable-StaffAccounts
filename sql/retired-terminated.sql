@@ -9,7 +9,8 @@ SELECT
  DateTerminationLastDay,
  DateTermination,
  EmploymentStatusCode,
- EmploymentTypeDescr
+ EmploymentTypeDescr,
+ EmploymentStatusDescr
 FROM vwHREmploymentList
 WHERE
  -- R: Retired T: Terminated
