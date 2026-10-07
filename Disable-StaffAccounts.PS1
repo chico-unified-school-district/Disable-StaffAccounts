@@ -256,9 +256,9 @@ function New-ExchangeOnlineSession ( [pscredential]$cred) {
 
 function Remove-ADGroupMemberships ($exGroups, [pscredential]$cred) {
  process {
-  $groups = @(($_.ad.memberOf)).ForEach({ $_.Split(',')[0].Replace('CN=', '') })
-  foreach ($group in $groups) {
-   if ($exGroups -match $group) { continue }
+  foreach ($group in @($_.ad.memberOf)) {
+   $groupName = $group.Split(',')[0].Replace('CN=', '')
+   if ($exGroups -contains $groupName) { continue }
    $params = @{
     Identity   = $group
     Members    = $_.ad.ObjectGUID
@@ -267,7 +267,7 @@ function Remove-ADGroupMemberships ($exGroups, [pscredential]$cred) {
     WhatIf     = $WhatIf
    }
    Remove-ADGroupMember @params
-   $msg = $MyInvocation.MyCommand.name, $_.info, $group
+   $msg = $MyInvocation.MyCommand.name, $_.info, $groupName
    Write-Host ('{0},{1},[{2}]' -f $msg) -F Blue
   }
   $_
@@ -314,19 +314,21 @@ function Remove-GoogleLicense ($ou) {
  }
  process {
   if (!($_.googleData)) { return $_ } # Skip if no Google data
-  $i = 20
-  do {
-   # Wait for Google Workspace to update user orgUnit
-   ($ouCheck = & $gam redirect stderr null print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
-   if (!$WhatIf -and !$ouCheck) { Start-Sleep 7 }
-   $i--
-  } until ($WhatIf -or $ouCheck.orgUnitPath -match $ou -or ($i -eq 0))
+  if (!$WhatIf) {
+   $i = 20
+   do {
+    # Wait for Google Workspace to update user orgUnit
+    ($ouCheck = & $gam redirect stderr null print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
+    if (!$WhatIf -and !$ouCheck) { Start-Sleep 7 }
+    $i--
+   } until ($WhatIf -or $ouCheck.orgUnitPath -match [regex]::Escape($ou) -or ($i -eq 0))
+  }
 
   $ErrorActionPreference = 'SilentlyContinue'
 
   ($gamUser = & $gam redirect stderr null info user $_.ad.HomePage) *>$null
   foreach ($lic in $license) {
-   if ($gamUser -match $lic) { continue }
+   if ($gamUser -match [regex]::Escape($lic)) { continue }
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkMagenta
    if (!$WhatIf) {
@@ -727,7 +729,7 @@ function Update-ADDescription ($msg, [pscredential]$cred) {
 
 function Update-OrgUnitAD ($ou, [pscredential]$cred) {
  process {
-  if ($_.ad.DistinguishedName -match $ou ) { return $_ }
+  if ($_.ad.DistinguishedName -match [regex]::Escape($ou)) { return $_ }
   Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
   $params = @{
    Identity   = $_.ad.ObjectGUID
@@ -744,7 +746,7 @@ function Update-OrgUnitAD ($ou, [pscredential]$cred) {
 function Update-OrgUnitGoogle ($ou) {
  process {
   if (!$_.googleData) { return $_ }
-  if ($_.googleData.orgUnitPath -match $ou) { return $_ }
+  if ($_.googleData.orgUnitPath -match [regex]::Escape($ou)) { return $_ }
   Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
   if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" org "$ou")*>null }
   $_
@@ -759,6 +761,7 @@ Import-Module CommonScriptFunctions
 
 $gam = 'C:\GAM7\gam.exe'
 
+`Show-BlockInfo ('Process Start: ' + (Get-Date))
 if ($WhatIf) { Show-TestRun }
 Clear-SessionData
 
@@ -874,3 +877,4 @@ Disconnect-ExchangeOnline -Confirm:$false
 Remove-Module tmp*
 
 if ($WhatIf) { Show-TestRun }
+Show-BlockInfo ('Process End: ' + (Get-Date))
