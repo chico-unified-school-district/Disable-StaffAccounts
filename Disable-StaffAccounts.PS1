@@ -39,19 +39,9 @@ param (
  [Alias('wi')][SWITCH]$WhatIf
 )
 
-function Add-DefaultGroups ($groups) {
- process {
-  foreach ($group in $groups) {
-   Write-Host ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.Name, $_.ad.EmployeeID, $_.ad.Mail, $group) -f Blue
-   Add-ADGroupMember -Identity $group -Members $_.ad.ObjectGUID
-  }
-  $_
- }
-}
-
 function Clear-ExtensionAttributes ([pscredential]$cred) {
  process {
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkMagenta
   # 1. Generate the array of all 15 attribute names
   $AllExtensions = 1..15 | ForEach-Object { "extensionAttribute$_" }
   # 2. Clear them all at once for the target user
@@ -70,7 +60,7 @@ function Convert-ToSharedMailbox {
   Set-Mailbox -Identity $_.ad.UserPrincipalName -Type Shared -WhatIf:$WhatIf # Convert to Shared Mailbox
 
   if (!$WhatIf) {
-   Write-Host ('{0},{1},Waiting for mailbox type change to propagate...' -f $msgData) -F Blue
+   Write-Host ('{0},{1},Waiting for mailbox type change to propagate...' -f $msgData) -F DarkMagenta
    Start-Sleep -Seconds 30
   }
   $params = @{
@@ -90,7 +80,7 @@ function Convert-ToSharedMailbox {
 function Disable-ADAccount ([pscredential]$cred) {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
-  Write-Host ('{0},{1}' -f $msgData ) -F DarkYellow
+  Write-Host ('{0},{1}' -f $msgData ) -F DarkMagenta
   $params = @{
    Identity   = $_.ad.ObjectGUID
    Enabled    = $false
@@ -121,7 +111,7 @@ function Disable-PreventAccidentalDelete ([pscredential]$cred) {
 
 function Disable-GoogleForwarding {
  process {
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info ) -F Blue
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info ) -F DarkMagenta
   # Write-Host ("& $gam user {0} forward off" -f $_.ad.homepage) -F Yellow
   if (!$WhatIf) { (& $gam user "$($_.ad.homepage)" forward off)*>$null }
   $_
@@ -268,7 +258,7 @@ function Remove-ADGroupMemberships ($exGroups, [pscredential]$cred) {
    }
    Remove-ADGroupMember @params
    $msg = $MyInvocation.MyCommand.name, $_.info, $groupName
-   Write-Host ('{0},{1},[{2}]' -f $msg) -F Blue
+   Write-Host ('{0},{1},[{2}]' -f $msg) -F DarkMagenta
   }
   $_
  }
@@ -285,7 +275,7 @@ function Remove-EmpEmailWork ($sqlParams) {
   }
   $sqlVars = ('id={0}' -f $_.ad.EmployeeID)
   # Write-Verbose ('{0},{1},{2},{3},{4}' -f $MyInvocation.MyCommand.name, $_.ad.EmployeeID, $_.ad.Mail, $sql, $sqlVars)
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F Yellow
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkRed
   if (!$WhatIf) { New-SqlOperation @sqlParams -Query $sql -Parameters $sqlVars }
   $_
  }
@@ -294,9 +284,9 @@ function Remove-EmpEmailWork ($sqlParams) {
 function Remove-GoogleAccount {
  process {
   if ($gmail -notmatch '@') { return $_ }
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F Blue
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F DarkRed
   if (!$WhatIf) {
-   try { (& $gam delete user "$($_.ad.HomePage)") *>$null }
+   try { (& $gam delete user "$($_.ad.HomePage)")*>$null }
    catch {
     Write-Host ('{0},{1},Error Deleting: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.ad.HomePage) -F Red
    }
@@ -314,32 +304,30 @@ function Remove-GoogleLicense ($ou) {
  }
  process {
   if (!($_.googleData)) { return $_ } # Skip if no Google data
+
   if (!$WhatIf) {
    $i = 20
    do {
     # Wait for Google Workspace to update user orgUnit
     ($ouCheck = & $gam redirect stderr null print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
-    if (!$WhatIf -and !$ouCheck) { Start-Sleep 7 }
+    if (!$ouCheck) { Start-Sleep 7 }
     $i--
-   } until ($WhatIf -or $ouCheck.orgUnitPath -match [regex]::Escape($ou) -or ($i -eq 0))
+   } until ($ouCheck.orgUnitPath -match [regex]::Escape($ou) -or ($i -eq 0))
   }
 
-  $ErrorActionPreference = 'SilentlyContinue'
-
-  ($gamUser = & $gam redirect stderr null info user $_.ad.HomePage) *>$null
+  ($gamUser = & $gam redirect stderr null info user $_.ad.HomePage)*>$null
   foreach ($lic in $license) {
    if ($gamUser -match [regex]::Escape($lic)) { continue }
    $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
    Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkMagenta
    if (!$WhatIf) {
-    try { (& $gam user "$($_.ad.HomePage)" del license $lic)*>null }
+    try { (& $gam user "$($_.ad.HomePage)" del license $lic)*>$null }
     catch {
      Write-Host ('{0},{1},Error Removing License [{2}] : {3}' -f $MyInvocation.MyCommand.Name, $_.info, $lic) -F Red
     }
    }
   }
 
-  $ErrorActionPreference = 'Stop'
   $_
  }
 }
@@ -347,7 +335,7 @@ function Remove-GoogleLicense ($ou) {
 function Remove-StaffADObject ([pscredential]$cred) {
  process {
   $msgData = $MyInvocation.MyCommand.name, $_.info
-  Write-Host ('{0},{1}' -f $msgData) -f Yellow
+  Write-Host ('{0},{1}' -f $msgData) -f DarkRed
   $params = @{
    Filter     = "ObjectGUID -eq '{0}'" -f $_.ad.ObjectGUID
    Credential = $cred
@@ -382,7 +370,7 @@ function Remove-UGNReference ($sqlParams) {
   if ($_.ad.EmployeeID -isnot [int]) { return $_ } # Skip this operation if empid is not a number
   $sqlVars = ('id={0}' -f $_.ad.EmployeeID)
   Write-Verbose ('{0},{1},{2},{3}' -f $MyInvocation.MyCommand.name, $_.ad.Mail, $query, $sqlVars)
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F Yellow
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkRed
   if ($WhatIf) { return $_ }
   New-SqlOperation @sqlParams -Query $query -Parameters $sqlVars
   $_
@@ -433,7 +421,7 @@ function Remove-O365Forwarding {
    WhatIf                     = $WhatIf
   }
   $msgData = $MyInvocation.MyCommand.name, $_.info, ($mailbox.ForwardingAddress, $mailbox.ForwardingSmtpAddress -join ',')
-  Write-Host ('{0},{1},Removing Mailbox Forwarding [{2}]' -f $msgData ) -F Blue
+  Write-Host ('{0},{1},Removing Mailbox Forwarding [{2}]' -f $msgData ) -F DarkMagenta
   $mailbox | Set-MailBox @mailBoxParams
   $_
  }
@@ -458,7 +446,7 @@ function Remove-SharedMailbox {
    Write-Warning ('{0},{1},NOT Deleted.' -f $msgData)
    return # Skip further processing
   }
-  Write-Host ('{0},{1},Shared Mailbox Deleted' -f $msgData) -F Green
+  Write-Host ('{0},{1},Shared Mailbox Deleted' -f $msgData) -F DarkRed
   $_
  }
 }
@@ -538,7 +526,7 @@ function Set-AeriesSTFInactive ($params) {
  begin { $sql = "UPDATE STF SET tg = 'i' WHERE id = @id" }
  process {
   $sqlVars = "id=$($_.ad.EmployeeID)"
-  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkMagenta
   if ($WhatIf) { return $_ }
   New-SqlOperation @params -Query $sql -Parameters $sqlVars
   $_
@@ -554,7 +542,7 @@ function Set-ADExpireDate ([pscredential]$cred) {
    Confirm    = $false
    WhatIf     = $WhatIf
   }
-  Write-Host ('{0},{1},Target Date: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.expireDate) -F Magenta
+  Write-Host ('{0},{1},Target Date: {2}' -f $MyInvocation.MyCommand.Name, $_.info, $_.expireDate) -F DarkMagenta
   Set-ADAccountExpiration @params
   $_
  }
@@ -564,7 +552,7 @@ function Set-GoogleArchiveState {
  process {
   if (!($_.googleData)) { return $_ } # Skip if no Google data
   if ($_.googleData.archived -eq $true) { return $_ } # Already archived
-  Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkBlue
+  Write-Host ('{0},{1},{2} - Archived On' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkMagenta
   if (!$WhatIf) {
    (& $gam update user "$($_.ad.HomePage)" archived on)*>null
    Start-Sleep -Seconds 30 # Allow time for archive state change to propagate
@@ -669,7 +657,7 @@ function Set-PropInfo {
 
 function Set-RandomPassword ([pscredential]$cred) {
  process {
-  Write-Host('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkYellow
+  Write-Host('{0},{1}' -f $MyInvocation.MyCommand.name, $_.info) -F DarkMagenta
   $params = @{
    Identity    = $_.ad.ObjectGUID
    NewPassword = ConvertTo-SecureString -String (New-RandomPassword 20) -AsPlainText -Force
@@ -704,7 +692,7 @@ function Suspend-GoogleAccount {
  process {
   if (!($_.googleData)) { return $_ } # Skip if no Google data
   if ($_.googleData.suspended -eq $true) { return $_ } # Already suspended
-  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F Blue
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage) -F DarkMagenta
   if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" suspended on)*>null }
   $_
  }
@@ -714,7 +702,7 @@ function Update-ADDescription ($msg, [pscredential]$cred) {
  process {
   if ($_.ad.Description -match 'Expiration Date') { return $_ }
   $newDesc = '{0} <{1} {2}>' -f $_.ad.Description, $msg, (Get-Date $_.expireDate -f 'yyyy-MM-dd')
-  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $newDesc) -f Magenta
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $newDesc) -f DarkMagenta
   $params = @{
    Identity    = $_.ad.ObjectGUID
    Description = $newDesc
@@ -730,7 +718,7 @@ function Update-ADDescription ($msg, [pscredential]$cred) {
 function Update-OrgUnitAD ($ou, [pscredential]$cred) {
  process {
   if ($_.ad.DistinguishedName -match [regex]::Escape($ou)) { return $_ }
-  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
+  Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F DarkMagenta
   $params = @{
    Identity   = $_.ad.ObjectGUID
    TargetPath = $ou
@@ -778,7 +766,7 @@ $SISParams = @{
 }
 
 $adProps = 'EmployeeID', 'Mail', 'AccountExpirationDate', 'accountExpires', 'HomePage', 'info',
-'memberOf', 'Description', 'msDS-ExternalDirectoryObjectId', 'LastLogonDate', 'WhenCreated'
+'memberOf', 'Description', 'LastLogonDate', 'msDS-ExternalDirectoryObjectId', 'Title', 'WhenCreated'
 $adData = Get-ADData -props $adProps -cred $ADCredential
 
 Show-BlockInfo 'Set Stale Sub Expirations'
