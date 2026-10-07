@@ -296,38 +296,23 @@ function Remove-GoogleAccount {
 }
 
 function Remove-GoogleLicense ($ou) {
- begin {
-  $license = @(
-   # 1010310009 # Google Workspace for Education Plus (Staff)
-   1010310008 # Google Workspace for Education Plus
-  )
- }
  process {
-  if (!($_.googleData)) { return $_ } # Skip if no Google data
+  if (!$_.googleData) { return $_ } # Skip if no Google data
 
-  if (!$WhatIf) {
+  if (!$WhatIf -and $_.googleData.OrgUnitPath -notlike "*$ou*") {
    $i = 20
    do {
     # Wait for Google Workspace to update user orgUnit
     ($ouCheck = & $gam redirect stderr null print users query "email:$($_.ad.HomePage)" fields 'orgUnitPath' | ConvertFrom-Csv)*>$null
     if (!$ouCheck) { Start-Sleep 7 }
     $i--
-   } until ($ouCheck.orgUnitPath -match [regex]::Escape($ou) -or ($i -eq 0))
+   } until ($ouCheck.orgUnitPath -like "*$ou*" -or ($i -eq 0))
   }
 
-  ($gamUser = & $gam redirect stderr null info user $_.ad.HomePage)*>$null
-  foreach ($lic in $license) {
-   if ($gamUser -match [regex]::Escape($lic)) { continue }
-   $msgData = $MyInvocation.MyCommand.name, $_.info, $_.ad.HomePage, $lic
-   Write-Host ('{0},{1},{2},Removing License [{3}]' -f $msgData) -F DarkMagenta
-   if (!$WhatIf) {
-    try { (& $gam user "$($_.ad.HomePage)" del license $lic)*>$null }
-    catch {
-     Write-Host ('{0},{1},Error Removing License [{2}] : {3}' -f $MyInvocation.MyCommand.Name, $_.info, $lic) -F Red
-    }
-   }
-  }
-
+  Write-Host ('{0},{1},Removing License: [1010310008]' -f $MyInvocation.MyCommand.name, $_.info) -F DarkMagenta
+  if ($WhatIf) { return $_ }
+  try { (& $gam user "$($_.ad.HomePage)" del license 1010310008)*>$null }
+  catch {}
   $_
  }
 }
