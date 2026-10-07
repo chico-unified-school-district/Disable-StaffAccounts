@@ -311,7 +311,7 @@ function Remove-GoogleLicense ($ou) {
 
   Write-Host ('{0},{1},Removing License: [1010310008]' -f $MyInvocation.MyCommand.name, $_.info) -F DarkMagenta
   if ($WhatIf) { return $_ }
-  try { (& $gam user "$($_.ad.HomePage)" del license 1010310008)*>$null }
+  try { (& $gam redirect stderr null user "$($_.ad.HomePage)" del license 1010310008)*>$null }
   catch {}
   $_
  }
