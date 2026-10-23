@@ -721,7 +721,7 @@ function Update-OrgUnitGoogle ($ou) {
   if (!$_.googleData) { return $_ }
   if ($_.googleData.orgUnitPath -match [regex]::Escape($ou)) { return $_ }
   Write-Host ('{0},{1},[{2}]' -f $MyInvocation.MyCommand.Name, $_.info, $ou) -F Magenta
-  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" org "$ou")*>null }
+  if (!$WhatIf) { (& $gam update user "$($_.ad.HomePage)" org "$ou")*>$null }
   $_
  }
 }
